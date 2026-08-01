@@ -1,0 +1,11 @@
+transformers>=4.45.0
+torch>=2.2.0
+datasets>=2.20.0
+accelerate>=0.34.0
+sentencepiece>=0.2.0
+pandas>=2.2.0
+numpy>=1.26.0
+matplotlib>=3.9.0
+psutil>=6.0.0
+tqdm>=4.66.0
+jupyter>=1.0.0
