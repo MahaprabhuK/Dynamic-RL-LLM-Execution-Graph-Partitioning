@@ -3,6 +3,7 @@ import pandas as pd
 
 from src.data.load_prompts import load_prompts
 from src.llm.inference import generate_response
+from src.telemetry.monitor import collect_metrics
 
 
 def run_benchmark(num_prompts=10):
@@ -21,27 +22,32 @@ def run_benchmark(num_prompts=10):
 
         response = generate_response(prompt)
 
-        end = time.perf_counter()
+        latency = time.perf_counter() - start
 
-        latency = end - start
+        metrics = collect_metrics()
 
         results.append({
             "prompt_id": idx,
-            "prompt": prompt,
-            "response": response,
-            "latency_seconds": round(latency, 3)
+            "timestamp": metrics["timestamp"],
+            "prompt_length": len(prompt),
+            "response_length": len(response),
+            "latency_seconds": round(latency, 3),
+            "tokens_per_second": round(len(response.split()) / latency, 2),
+            "cpu_percent": metrics["cpu_percent"],
+            "ram_percent": metrics["ram_percent"],
+            "ram_used_gb": metrics["ram_used_gb"],
+            "partition_strategy": "static"
         })
 
     df = pd.DataFrame(results)
 
-    output_path = "data/processed/inference_results.csv"
+    output_path = "data/processed/runtime_metrics.csv"
 
     df.to_csv(output_path, index=False)
 
-    print("\nBenchmark completed.")
-
-    print(f"Results saved to:\n{output_path}")
+    print("\nRuntime metrics saved successfully!")
+    print(output_path)
 
 
 if __name__ == "__main__":
-    run_benchmark(num_prompts=10)
+    run_benchmark(num_prompts=20)
