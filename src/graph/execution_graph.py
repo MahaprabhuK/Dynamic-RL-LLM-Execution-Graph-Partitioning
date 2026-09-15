@@ -1,21 +1,26 @@
 import networkx as nx
 
 
-def build_execution_graph(prompt_id):
+def build_execution_graph(prompt_id, partition_strategy=None):
     """
-    Creates a simple execution graph for one inference request.
-    This is a placeholder that will later be dynamically partitioned
-    by the RL scheduler.
+    Build the LLM execution graph and optionally assign
+    nodes to partitions selected by the scheduler.
     """
 
     G = nx.DiGraph()
 
-    G.add_node("Input")
-    G.add_node("Tokenizer")
-    G.add_node("LLM")
-    G.add_node("Decoder")
-    G.add_node("Output")
+    # Create execution nodes
+    nodes = [
+        "Input",
+        "Tokenizer",
+        "LLM",
+        "Decoder",
+        "Output"
+    ]
 
+    G.add_nodes_from(nodes)
+
+    # Create execution flow
     G.add_edges_from([
         ("Input", "Tokenizer"),
         ("Tokenizer", "LLM"),
@@ -23,11 +28,46 @@ def build_execution_graph(prompt_id):
         ("Decoder", "Output")
     ])
 
+    # Add partition information
+    if partition_strategy is not None:
+
+        partitions = partition_strategy.get_partition()
+
+        for partition_id, partition in enumerate(partitions, 1):
+
+            for node in partition:
+
+                if node in G.nodes:
+                    G.nodes[node]["partition"] = partition_id
+
     return G
 
 
 if __name__ == "__main__":
-    graph = build_execution_graph(1)
 
-    print("Nodes:", graph.nodes())
-    print("Edges:", graph.edges())
+    from src.llm.partition import PartitionStrategy
+
+    strategy = PartitionStrategy(2)
+
+    graph = build_execution_graph(
+        prompt_id=1,
+        partition_strategy=strategy
+    )
+
+    print("Execution Graph")
+    print("----------------")
+
+    for node in graph.nodes:
+
+        partition = graph.nodes[node].get(
+            "partition",
+            "not assigned"
+        )
+
+        print(
+            f"{node:10s} -> Partition {partition}"
+        )
+
+    print("\nEdges:")
+    for edge in graph.edges:
+        print(f"{edge[0]} -> {edge[1]}")
