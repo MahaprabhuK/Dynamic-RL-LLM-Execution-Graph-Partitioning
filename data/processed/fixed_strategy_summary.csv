@@ -1,0 +1,4 @@
+strategy,strategy_id,num_prompts,mean_latency,median_latency,std_latency,min_latency,max_latency,mean_tokens_per_sec,mean_cpu_percent,mean_ram_percent,mean_ram_used_gb
+static,0,20,14.8296,10.3214,8.434,0.8086,31.272,4.68,60.94,91.07,14.29
+balanced,1,20,25.1362,26.9292,8.2474,2.7876,33.6783,2.29,41.43,95.52,14.99
+latency_optimized,2,20,22.5951,25.2853,6.858,3.1161,27.4423,2.49,36.48,95.43,14.97

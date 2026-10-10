@@ -28,17 +28,25 @@ def build_execution_graph(prompt_id, partition_strategy=None):
         ("Decoder", "Output")
     ])
 
-    # Add partition information
+    # Add partition and layer metadata
     if partition_strategy is not None:
+        G.graph["strategy_name"] = partition_strategy.strategy_name
+        G.graph["strategy_id"] = partition_strategy.strategy_id
+        G.graph["layer_ranges"] = partition_strategy.get_layer_ranges()
 
         partitions = partition_strategy.get_partition()
+        stage_defs = partition_strategy.get_stage_definitions()
 
         for partition_id, partition in enumerate(partitions, 1):
-
+            stage_meta = stage_defs[partition_id - 1] if partition_id <= len(stage_defs) else {}
             for node in partition:
-
                 if node in G.nodes:
                     G.nodes[node]["partition"] = partition_id
+                    G.nodes[node]["strategy_name"] = partition_strategy.strategy_name
+                    G.nodes[node]["strategy_id"] = partition_strategy.strategy_id
+                    G.nodes[node]["layer_start"] = stage_meta.get("layer_start")
+                    G.nodes[node]["layer_end"] = stage_meta.get("layer_end")
+                    G.nodes[node]["stage_type"] = stage_meta.get("stage_type")
 
     return G
 

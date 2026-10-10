@@ -34,7 +34,7 @@ class DQNAgent:
 
     def __init__(
         self,
-        state_size=5,
+        state_size=4,
         action_size=3,
         learning_rate=0.001,
         gamma=0.95,

@@ -1,0 +1,4 @@
+strategy,strategy_id,num_prompts,mean_latency,median_latency,std_latency,min_latency,max_latency,mean_tokens_per_sec,mean_cpu_percent,mean_ram_percent,mean_ram_used_gb,mean_total_handoff_latency_seconds,mean_total_activation_handoff_mb
+static,0,20,24.0772,26.6934,9.0342,2.8407,33.688,2.51,41.18,92.06,14.45,0.00271414,0.9257
+balanced,1,20,22.7316,25.0886,6.9976,2.6515,28.2243,2.5,41.46,93.13,14.61,0.00489722,1.8515
+latency_optimized,2,20,22.3607,26.2618,7.7987,2.8056,27.8765,2.64,41.38,94.62,14.85,0.00298332,0.9257

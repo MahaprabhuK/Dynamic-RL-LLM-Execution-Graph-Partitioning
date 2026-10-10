@@ -1,14 +1,23 @@
-def calculate_reward(latency, cpu_percent, ram_percent):
+def calculate_reward(latency: float, cpu_percent: float, ram_percent: float, max_latency_ref: float = 40.0):
     """
-    Calculate the reward for the RL scheduler.
+    Calculate empirical reward for RL scheduler based on measured runtime outcomes.
 
-    Lower latency and lower resource utilization
-    should produce a better reward.
+    State-free reward formula:
+        reward = -(0.6 * (latency / max_latency_ref) + 0.2 * (cpu_percent / 100.0) + 0.2 * (ram_percent / 100.0))
+
+    Args:
+        latency: Measured end-to-end latency in seconds.
+        cpu_percent: Measured average CPU percentage during execution.
+        ram_percent: Measured RAM percentage during execution.
+        max_latency_ref: Reference maximum latency scaling bound (default: 40.0s).
+
+    Returns:
+        float: Scalar reward value in range [-1.0, 0.0].
     """
 
-    latency_penalty = latency / 30.0
-    cpu_penalty = cpu_percent / 100.0
-    ram_penalty = ram_percent / 100.0
+    latency_penalty = min(latency / max_latency_ref, 1.5)
+    cpu_penalty = min(cpu_percent / 100.0, 1.0)
+    ram_penalty = min(ram_percent / 100.0, 1.0)
 
     reward = -(
         0.6 * latency_penalty +
@@ -16,7 +25,7 @@ def calculate_reward(latency, cpu_percent, ram_percent):
         0.2 * ram_penalty
     )
 
-    return reward
+    return float(reward)
 
 
 if __name__ == "__main__":
@@ -27,4 +36,4 @@ if __name__ == "__main__":
         ram_percent=95.0
     )
 
-    print("Test reward:", reward)
+    print("Test empirical reward:", reward)
