@@ -193,6 +193,7 @@ class DQNAgent:
         self.target_model.load_state_dict(
             self.model.state_dict()
         )
+
     def save(self, path):
         torch.save(self.model.state_dict(), path)
         print(f"DQN model saved to: {path}")
@@ -210,10 +211,9 @@ if __name__ == "__main__":
 
     agent = DQNAgent()
 
-    test_state = np.array(
-        [36, 358, 36.746, 62.4, 97.4],
-        dtype=np.float32
-    )
+    from src.rl.features import build_state
+
+    test_state = build_state(prompt_length=36, input_tokens=9, cpu_percent=62.4, ram_percent=97.4)
 
     action = agent.choose_action(test_state)
 

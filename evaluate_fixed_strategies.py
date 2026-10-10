@@ -1,19 +1,25 @@
 """
-Evaluation script to establish the v2 operational fixed-strategy baseline.
-Evaluates 20 prompts under all 3 partition strategies using the layer-sliced execution engine:
-1. static (strategy_id=0)
-2. balanced (strategy_id=1)
-3. latency_optimized (strategy_id=2)
+Collects the v3 fixed-strategy dataset used to train and evaluate the scheduler.
 
-Measures physical activation tensor handoffs and stage execution times on CPU.
+Protocol (designed to remove the run-order confound of v1/v2):
+- A "context" is one request: prompt x repeat x background-load level.
+- Contexts are visited in random order.
+- Inside each context, the pre-decision state is measured once, then all three
+  strategies run back-to-back in a freshly shuffled order, so their outcomes
+  are paired and comparable.
+- Background load (busy worker processes) creates genuinely different system
+  states, so the best strategy can depend on the context.
+- Warm-up runs precede measurement; throughput uses real generated tokens.
+
+Usage:
+    python evaluate_fixed_strategies.py --num-prompts 20 --repeats 2 --loads 0,4,8
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
-import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend for plot generation
-import matplotlib.pyplot as plt
+
 import numpy as np
 import pandas as pd
 
@@ -22,203 +28,218 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from src.benchmark.evaluate import oracle_wins, paired_differences, summarize_runs
+from src.benchmark.plots import plot_latency_by_load, plot_paired_differences
 from src.data.load_prompts import load_prompts
-from src.llm.inference import generate_partitioned_response
-from src.llm.partition import apply_partition_strategy
-from src.graph.execution_graph import build_execution_graph
+from src.llm.inference import generate_partitioned_response, get_tokenizer
+from src.llm.partition import PartitionStrategy, apply_partition_strategy
+from src.telemetry.load_generator import BackgroundCPULoad
 from src.telemetry.monitor import collect_metrics
 
+STRATEGIES = [0, 1, 2]  # static, balanced, latency_optimized
 
-def run_fixed_strategy_v2_evaluation(num_prompts: int = 20):
+
+def execute_strategy(prompt: str, strategy: PartitionStrategy, max_new_tokens: int):
+    """Run one request and return its measured outcome."""
+    start_time = time.perf_counter()
+    response, stage_records, token_ids = generate_partitioned_response(
+        prompt=prompt,
+        strategy=strategy,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        return_token_ids=True
+    )
+    latency = time.perf_counter() - start_time
+    post_metrics = collect_metrics()
+
+    return {
+        "response": response,
+        "token_ids": token_ids,
+        "stage_records": stage_records,
+        "latency": latency,
+        "post_metrics": post_metrics
+    }
+
+
+def warm_up(prompt: str):
+    print("Warm-up runs...", flush=True)
+    for strat_id in STRATEGIES:
+        generate_partitioned_response(prompt, strategy=strat_id, max_new_tokens=8)
+
+
+def run_fixed_strategy_evaluation(
+    num_prompts: int = 20,
+    repeats: int = 2,
+    loads=(0, 4, 8),
+    max_new_tokens: int = 100,
+    prompt_offset: int = 0,
+    seed: int = 42,
+    tag: str = "v3"
+):
     data_dir = ROOT_DIR / "data" / "processed"
     results_dir = ROOT_DIR / "results"
     data_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
+    rng = np.random.default_rng(seed)
+    all_prompts = load_prompts(csv_path=str(data_dir / "prompts.csv"), limit=prompt_offset + num_prompts)
+    prompts = all_prompts[prompt_offset:]
+    tokenizer = get_tokenizer()
+
+    contexts = [
+        (prompt_offset + p_idx + 1, prompt, rep, load)
+        for p_idx, prompt in enumerate(prompts)
+        for rep in range(repeats)
+        for load in loads
+    ]
+    rng.shuffle(contexts)
+
     print("=" * 80, flush=True)
-    print(f"STARTING V2 LAYER-SLICED BASELINE EVALUATION ({num_prompts} PROMPTS x 3 STRATEGIES)", flush=True)
+    print(f"V3 FIXED-STRATEGY COLLECTION: {len(prompts)} prompts x {repeats} repeats x loads {list(loads)}"
+          f" = {len(contexts)} contexts x {len(STRATEGIES)} strategies", flush=True)
+    for s in STRATEGIES:
+        strat = PartitionStrategy(s)
+        print(f"  [{s}] {strat.strategy_name:18s} layers={strat.get_layer_ranges()} threads={strat.get_thread_counts()}")
     print("=" * 80, flush=True)
 
-    prompts = load_prompts(csv_path=str(data_dir / "prompts.csv"), limit=num_prompts)
-    print(f"Loaded {len(prompts)} prompts.", flush=True)
+    warm_up(prompts[0])
 
-    strategies = [0, 1, 2]  # static, balanced, latency_optimized
+    metrics_path = data_dir / f"fixed_strategy_metrics_{tag}.csv"
+    stages_path = data_dir / f"fixed_strategy_stage_metrics_{tag}.csv"
     raw_results = []
     stage_results = []
+    t_begin = time.perf_counter()
 
-    for strat_id in strategies:
-        strat_obj = apply_partition_strategy(strat_id)
-        strat_name = strat_obj.strategy_name
-        print(f"\n--- Running Strategy [{strat_id}]: {strat_name} ---", flush=True)
+    for c_idx, (prompt_id, prompt, rep, load) in enumerate(contexts, start=1):
+        context_id = c_idx
+        input_tokens = len(tokenizer.encode(prompt))
+        order = rng.permutation(STRATEGIES)
 
-        for idx, prompt in enumerate(prompts, start=1):
-            print(f"  [Prompt {idx:02d}/{num_prompts:02d}] Executing layer-sliced '{strat_name}'...", end="", flush=True)
+        print(f"[{c_idx:03d}/{len(contexts)}] prompt {prompt_id:3d} rep {rep} load {load}:", end="", flush=True)
 
-            try:
-                # Construct execution graph metadata
-                graph = build_execution_graph(prompt_id=idx, partition_strategy=strat_obj)
-
-                start_time = time.perf_counter()
-                response, stage_records = generate_partitioned_response(
-                    prompt=prompt,
-                    strategy=strat_obj,
-                    max_new_tokens=100,
-                    do_sample=False
-                )
-                latency = time.perf_counter() - start_time
-
-                metrics = collect_metrics()
-
-                response_words = len(response.split())
-                tokens_per_sec = round(response_words / latency, 2) if latency > 0 else 0.0
-
-                total_handoff_mb = sum(stage["activation_size_mb"] for stage in stage_records)
-                total_handoff_latency = sum(stage["handoff_latency_seconds"] for stage in stage_records)
-
-                record = {
-                    "prompt_id": idx,
-                    "strategy": strat_name,
-                    "strategy_id": strat_id,
-                    "prompt_length": len(prompt),
-                    "response_length": len(response),
-                    "latency_seconds": round(latency, 4),
-                    "tokens_per_second": tokens_per_sec,
-                    "cpu_percent": metrics["cpu_percent"],
-                    "ram_percent": metrics["ram_percent"],
-                    "ram_used_gb": metrics["ram_used_gb"],
-                    "total_activation_handoff_mb": round(total_handoff_mb, 4),
-                    "total_handoff_latency_seconds": round(total_handoff_latency, 8)
-                }
-                raw_results.append(record)
-
-                for stg in stage_records:
-                    stg_row = {
-                        "prompt_id": idx,
-                        "strategy": strat_name,
-                        "partition_id": stg["partition_id"],
-                        "layer_start": stg["layer_start"],
-                        "layer_end": stg["layer_end"],
-                        "stage_latency_seconds": stg["stage_latency_seconds"],
-                        "activation_size_bytes": stg["activation_size_bytes"],
-                        "activation_size_mb": stg["activation_size_mb"],
-                        "handoff_latency_seconds": stg["handoff_latency_seconds"]
-                    }
-                    stage_results.append(stg_row)
-
-                print(f" Done ({latency:.2f}s, {tokens_per_sec} tok/s, {total_handoff_mb:.2f} MB handoffs)", flush=True)
-
-            except Exception as e:
-                print(f" ERROR: Prompt {idx} failed on strategy {strat_name}: {e}", flush=True)
-
-    df_metrics = pd.DataFrame(raw_results)
-    metrics_path = data_dir / "fixed_strategy_metrics_v2.csv"
-    df_metrics.to_csv(metrics_path, index=False)
-
-    df_stages = pd.DataFrame(stage_results)
-    stages_path = data_dir / "fixed_strategy_stage_metrics_v2.csv"
-    df_stages.to_csv(stages_path, index=False)
-
-    print(f"\nSaved raw metrics v2 ({len(df_metrics)} rows) to: {metrics_path}", flush=True)
-    print(f"Saved stage metrics v2 ({len(df_stages)} rows) to: {stages_path}", flush=True)
-
-    # Compute Summary Statistics
-    summary_list = []
-    for strat_id in strategies:
-        strat_obj = apply_partition_strategy(strat_id)
-        strat_name = strat_obj.strategy_name
-        sub_df = df_metrics[df_metrics["strategy_id"] == strat_id]
-
-        if sub_df.empty:
+        try:
+            with BackgroundCPULoad(load):
+                pre = collect_metrics(interval=0.5)
+                outcomes = {}
+                for run_order, strat_id in enumerate(order):
+                    outcomes[int(strat_id)] = (run_order, execute_strategy(prompt, apply_partition_strategy(int(strat_id)), max_new_tokens))
+        except Exception as e:
+            print(f" ERROR: {e}", flush=True)
             continue
 
-        latencies = sub_df["latency_seconds"]
-        summary_record = {
-            "strategy": strat_name,
-            "strategy_id": strat_id,
-            "num_prompts": len(sub_df),
-            "mean_latency": round(latencies.mean(), 4),
-            "median_latency": round(latencies.median(), 4),
-            "std_latency": round(latencies.std(), 4),
-            "min_latency": round(latencies.min(), 4),
-            "max_latency": round(latencies.max(), 4),
-            "mean_tokens_per_sec": round(sub_df["tokens_per_second"].mean(), 2),
-            "mean_cpu_percent": round(sub_df["cpu_percent"].mean(), 2),
-            "mean_ram_percent": round(sub_df["ram_percent"].mean(), 2),
-            "mean_ram_used_gb": round(sub_df["ram_used_gb"].mean(), 2),
-            "mean_total_handoff_latency_seconds": round(sub_df["total_handoff_latency_seconds"].mean(), 8),
-            "mean_total_activation_handoff_mb": round(sub_df["total_activation_handoff_mb"].mean(), 4)
-        }
-        summary_list.append(summary_record)
+        static_ids = outcomes[0][1]["token_ids"]
+        for strat_id in STRATEGIES:
+            run_order, out = outcomes[strat_id]
+            strat = apply_partition_strategy(strat_id)
+            n_tokens = len(out["token_ids"])
+            post = out["post_metrics"]
 
-    df_summary = pd.DataFrame(summary_list)
-    summary_path = data_dir / "fixed_strategy_summary_v2.csv"
-    df_summary.to_csv(summary_path, index=False)
-    print(f"Saved summary metrics v2 to: {summary_path}", flush=True)
+            raw_results.append({
+                "context_id": context_id,
+                "prompt_id": prompt_id,
+                "repeat": rep,
+                "load_workers": load,
+                "run_order": run_order,
+                "strategy": strat.strategy_name,
+                "strategy_id": strat_id,
+                "stage_threads": "/".join(map(str, strat.get_thread_counts())),
+                "prompt_length": len(prompt),
+                "input_tokens": input_tokens,
+                "pre_cpu_percent": pre["cpu_percent"],
+                "pre_ram_percent": pre["ram_percent"],
+                "pre_ram_available_gb": pre["ram_available_gb"],
+                "response_length": len(out["response"]),
+                "num_generated_tokens": n_tokens,
+                "latency_seconds": round(out["latency"], 4),
+                "tokens_per_second": round(n_tokens / out["latency"], 3) if out["latency"] > 0 else 0.0,
+                "cpu_percent": post["cpu_percent"],
+                "ram_percent": post["ram_percent"],
+                "ram_used_gb": post["ram_used_gb"],
+                "total_activation_handoff_mb": round(sum(s["activation_size_mb"] for s in out["stage_records"]), 4),
+                "total_handoff_latency_seconds": round(sum(s["handoff_latency_seconds"] for s in out["stage_records"]), 8),
+                "output_matches_static": out["token_ids"] == static_ids
+            })
+
+            for stg in out["stage_records"]:
+                stage_results.append({
+                    "context_id": context_id,
+                    "prompt_id": prompt_id,
+                    "strategy": strat.strategy_name,
+                    "partition_id": stg["partition_id"],
+                    "layer_start": stg["layer_start"],
+                    "layer_end": stg["layer_end"],
+                    "num_threads": stg["num_threads"],
+                    "stage_latency_seconds": stg["stage_latency_seconds"],
+                    "activation_size_bytes": stg["activation_size_bytes"],
+                    "activation_size_mb": stg["activation_size_mb"],
+                    "handoff_latency_seconds": stg["handoff_latency_seconds"]
+                })
+
+        lat = {apply_partition_strategy(s).strategy_name[:6]: round(outcomes[s][1]["latency"], 2) for s in STRATEGIES}
+        elapsed = time.perf_counter() - t_begin
+        eta = elapsed / c_idx * (len(contexts) - c_idx)
+        print(f" pre-cpu {pre['cpu_percent']:5.1f}% | {lat} | ETA {eta / 60:.0f} min", flush=True)
+
+        # Save incrementally so long runs can be interrupted without losing data
+        pd.DataFrame(raw_results).to_csv(metrics_path, index=False)
+
+    df_metrics = pd.DataFrame(raw_results)
+    df_metrics.to_csv(metrics_path, index=False)
+    pd.DataFrame(stage_results).to_csv(stages_path, index=False)
+    print(f"\nSaved raw metrics ({len(df_metrics)} rows) to: {metrics_path}", flush=True)
+    print(f"Saved stage metrics ({len(stage_results)} rows) to: {stages_path}", flush=True)
+
+    report_fixed_strategy_results(df_metrics, data_dir, results_dir, tag)
+    return df_metrics
+
+
+def report_fixed_strategy_results(df_metrics: pd.DataFrame, data_dir: Path, results_dir: Path, tag: str):
+    summary = summarize_runs(df_metrics, ["load_workers", "strategy"])
+    summary_path = data_dir / f"fixed_strategy_summary_{tag}.csv"
+    summary.to_csv(summary_path, index=False)
+
+    diffs = paired_differences(df_metrics, "strategy", baseline="static", group_col="load_workers")
+    diffs_path = data_dir / f"fixed_strategy_paired_diffs_{tag}.csv"
+    diffs.to_csv(diffs_path, index=False)
+
+    wins = oracle_wins(df_metrics)
 
     print("\n" + "=" * 80, flush=True)
-    print("V2 SUMMARY STATISTICS BY STRATEGY", flush=True)
+    print("SUMMARY BY LOAD LEVEL AND STRATEGY (95% bootstrap CI on mean latency)", flush=True)
     print("=" * 80, flush=True)
-    print(df_summary.to_string(index=False), flush=True)
-    print("=" * 80, flush=True)
+    print(summary[["load_workers", "strategy", "num_runs", "mean_latency", "ci95_low", "ci95_high",
+                   "mean_tokens_per_sec", "mean_pre_cpu_percent"]].to_string(index=False), flush=True)
+    print("\nPAIRED DIFFERENCES VS STATIC (negative = faster)", flush=True)
+    print(diffs.to_string(index=False), flush=True)
+    print("\nFASTEST STRATEGY COUNTS PER LOAD LEVEL", flush=True)
+    print(wins.to_string(index=False), flush=True)
+    print(f"\nOutputs identical to static: {df_metrics['output_matches_static'].mean():.1%} of runs", flush=True)
+    print(f"Saved: {summary_path}\nSaved: {diffs_path}", flush=True)
 
-    generate_plots_v2(df_metrics, df_summary, results_dir)
-
-    return df_metrics, df_summary, df_stages
-
-
-def generate_plots_v2(df_metrics: pd.DataFrame, df_summary: pd.DataFrame, results_dir: Path):
-    plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
-    colors = {"static": "#2b5c8f", "balanced": "#d95f02", "latency_optimized": "#7570b3"}
-
-    # 1. Latency plot v2
-    plt.figure(figsize=(10, 6))
-    for strat in df_metrics["strategy"].unique():
-        sub = df_metrics[df_metrics["strategy"] == strat]
-        plt.plot(sub["prompt_id"], sub["latency_seconds"], marker="o", label=strat, color=colors.get(strat, "blue"))
-
-    plt.title("V2 Operational Latency per Prompt across Partition Strategies", fontsize=14, fontweight="bold")
-    plt.xlabel("Prompt ID", fontsize=12)
-    plt.ylabel("Latency (seconds)", fontsize=12)
-    plt.xticks(range(1, df_metrics["prompt_id"].max() + 1))
-    plt.legend(title="Strategy")
-    plt.tight_layout()
-    latency_plot_path = results_dir / "fixed_strategy_latency_v2.png"
-    plt.savefig(latency_plot_path, dpi=300)
-    plt.close()
-    print(f"Generated plot: {latency_plot_path}", flush=True)
-
-    # 2. Throughput plot v2
-    plt.figure(figsize=(10, 6))
-    for strat in df_metrics["strategy"].unique():
-        sub = df_metrics[df_metrics["strategy"] == strat]
-        plt.plot(sub["prompt_id"], sub["tokens_per_second"], marker="s", label=strat, color=colors.get(strat, "blue"))
-
-    plt.title("V2 Operational Throughput (Tokens/sec) across Partition Strategies", fontsize=14, fontweight="bold")
-    plt.xlabel("Prompt ID", fontsize=12)
-    plt.ylabel("Tokens / Second", fontsize=12)
-    plt.xticks(range(1, df_metrics["prompt_id"].max() + 1))
-    plt.legend(title="Strategy")
-    plt.tight_layout()
-    throughput_plot_path = results_dir / "fixed_strategy_throughput_v2.png"
-    plt.savefig(throughput_plot_path, dpi=300)
-    plt.close()
-    print(f"Generated plot: {throughput_plot_path}", flush=True)
-
-    # 3. Summary Mean Latency Bar Chart v2
-    plt.figure(figsize=(8, 5))
-    bars = plt.bar(df_summary["strategy"], df_summary["mean_latency"], color=[colors.get(s, "blue") for s in df_summary["strategy"]], width=0.5)
-    plt.title("V2 Operational Mean Latency by Partition Strategy", fontsize=14, fontweight="bold")
-    plt.xlabel("Partition Strategy", fontsize=12)
-    plt.ylabel("Mean Latency (seconds)", fontsize=12)
-    for bar in bars:
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2.0, yval + 0.1, f"{yval:.2f}s", ha="center", va="bottom", fontweight="bold")
-    plt.tight_layout()
-    summary_plot_path = results_dir / "fixed_strategy_summary_v2.png"
-    plt.savefig(summary_plot_path, dpi=300)
-    plt.close()
-    print(f"Generated plot: {summary_plot_path}", flush=True)
+    plot_latency_by_load(summary, "strategy", results_dir / f"fixed_strategy_latency_by_load_{tag}.png",
+                         "Mean latency by strategy and background load")
+    if not diffs.empty:
+        plot_paired_differences(diffs, results_dir / f"fixed_strategy_paired_diffs_{tag}.png",
+                                "Paired latency difference vs static")
 
 
 if __name__ == "__main__":
-    run_fixed_strategy_v2_evaluation(num_prompts=20)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--num-prompts", type=int, default=20)
+    parser.add_argument("--prompt-offset", type=int, default=0)
+    parser.add_argument("--repeats", type=int, default=2)
+    parser.add_argument("--loads", default="0,4,8", help="Comma-separated numbers of busy background workers.")
+    parser.add_argument("--max-new-tokens", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--tag", default="v3")
+    args = parser.parse_args()
+
+    run_fixed_strategy_evaluation(
+        num_prompts=args.num_prompts,
+        repeats=args.repeats,
+        loads=[int(x) for x in args.loads.split(",")],
+        max_new_tokens=args.max_new_tokens,
+        prompt_offset=args.prompt_offset,
+        seed=args.seed,
+        tag=args.tag
+    )

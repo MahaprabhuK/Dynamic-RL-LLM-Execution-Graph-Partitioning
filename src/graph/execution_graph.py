@@ -33,6 +33,7 @@ def build_execution_graph(prompt_id, partition_strategy=None):
         G.graph["strategy_name"] = partition_strategy.strategy_name
         G.graph["strategy_id"] = partition_strategy.strategy_id
         G.graph["layer_ranges"] = partition_strategy.get_layer_ranges()
+        G.graph["stage_threads"] = partition_strategy.get_thread_counts()
 
         partitions = partition_strategy.get_partition()
         stage_defs = partition_strategy.get_stage_definitions()
@@ -46,6 +47,7 @@ def build_execution_graph(prompt_id, partition_strategy=None):
                     G.nodes[node]["strategy_id"] = partition_strategy.strategy_id
                     G.nodes[node]["layer_start"] = stage_meta.get("layer_start")
                     G.nodes[node]["layer_end"] = stage_meta.get("layer_end")
+                    G.nodes[node]["num_threads"] = stage_meta.get("num_threads")
                     G.nodes[node]["stage_type"] = stage_meta.get("stage_type")
 
     return G

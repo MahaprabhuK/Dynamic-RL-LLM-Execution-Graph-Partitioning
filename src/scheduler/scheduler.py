@@ -39,14 +39,12 @@ class RLScheduler:
 
 if __name__ == "__main__":
 
-    import numpy as np
     from src.rl.dqn_agent import DQNAgent
 
-    # Example normalized runtime state
-    state = np.array(
-        [0.18, 0.60, 0.50, 0.70, 0.95],
-        dtype=np.float32
-    )
+    from src.rl.features import build_state
+
+    # Example pre-decision state: 36-char prompt, 9 input tokens, CPU 70%, RAM 95%
+    state = build_state(prompt_length=36, input_tokens=9, cpu_percent=70.0, ram_percent=95.0)
 
     agent = DQNAgent()
 

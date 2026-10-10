@@ -1,4 +1,4 @@
-transformers>=4.45.0
+transformers>=4.56.0
 torch>=2.2.0
 datasets>=2.20.0
 accelerate>=0.34.0
@@ -9,3 +9,6 @@ matplotlib>=3.9.0
 psutil>=6.0.0
 tqdm>=4.66.0
 jupyter>=1.0.0
+networkx>=3.0
+pyyaml>=6.0
+pytest>=8.0

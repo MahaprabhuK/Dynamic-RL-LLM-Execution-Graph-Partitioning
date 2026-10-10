@@ -20,7 +20,7 @@ def run_benchmark(num_prompts=10):
 
         start = time.perf_counter()
 
-        response = generate_response(prompt)
+        response, token_ids = generate_response(prompt, return_token_ids=True)
 
         latency = time.perf_counter() - start
 
@@ -32,7 +32,8 @@ def run_benchmark(num_prompts=10):
             "prompt_length": len(prompt),
             "response_length": len(response),
             "latency_seconds": round(latency, 3),
-            "tokens_per_second": round(len(response.split()) / latency, 2),
+            "num_generated_tokens": len(token_ids),
+            "tokens_per_second": round(len(token_ids) / latency, 2),
             "cpu_percent": metrics["cpu_percent"],
             "ram_percent": metrics["ram_percent"],
             "ram_used_gb": metrics["ram_used_gb"],

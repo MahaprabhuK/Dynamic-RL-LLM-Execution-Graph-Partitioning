@@ -1,0 +1,20 @@
+# Project configuration. Values here override the defaults in src/config.py.
+
+model:
+  name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  # float32 keeps partitioned outputs token-identical to model.generate().
+  # bfloat16 halves RAM (~2.2 GB instead of ~4.4 GB) but changes outputs slightly.
+  dtype: float32
+
+# Each strategy is a real execution configuration: a layer split plus an
+# intra-op thread budget per stage, expressed as a fraction of physical cores.
+strategies:
+  static:
+    layer_ranges: [[0, 21]]
+    thread_fractions: [1.0]
+  balanced:
+    layer_ranges: [[0, 10], [11, 21]]
+    thread_fractions: [0.3, 0.3]
+  latency_optimized:
+    layer_ranges: [[0, 21]]
+    thread_fractions: [0.6]
