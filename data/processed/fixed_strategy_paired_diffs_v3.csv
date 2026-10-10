@@ -1,0 +1,11 @@
+load_workers,condition,baseline,num_contexts,mean_diff_seconds,ci95_low,ci95_high,mean_diff_percent,faster_rate,significant
+0,balanced,static,10,2.5725,0.5494,5.4309,30.14,0.1,True
+0,latency_optimized,static,10,0.656,-0.1811,1.4688,11.84,0.3,False
+2,balanced,static,10,-0.022,-0.8663,0.7131,6.09,0.5,False
+2,latency_optimized,static,10,-0.2257,-0.8508,0.2587,0.59,0.6,False
+4,balanced,static,10,-6.617,-9.9452,-3.4726,-27.31,0.8,True
+4,latency_optimized,static,10,-2.8006,-6.0316,-0.2069,-16.15,0.8,True
+6,balanced,static,10,-8.7721,-13.1586,-4.2733,-26.36,0.7,True
+6,latency_optimized,static,10,-2.3086,-5.7904,0.6654,-17.66,0.5,False
+8,balanced,static,10,-21.3958,-31.8555,-10.7248,-34.94,0.8,True
+8,latency_optimized,static,10,1.0532,-12.9075,17.8779,65.78,0.5,False

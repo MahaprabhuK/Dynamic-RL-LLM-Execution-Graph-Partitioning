@@ -21,6 +21,44 @@ def collect_metrics(interval: float = 0.1):
     }
 
 
+class ExternalLoadMonitor:
+    """
+    Non-blocking load telemetry for decisions made DURING generation.
+
+    System CPU while generating includes our own inference threads, which would
+    make the policy react to itself. This monitor subtracts this process's CPU
+    usage, giving the load caused by everything else on the machine, which is
+    comparable to the pre-run CPU measured before a request starts.
+
+    Each sample() averages over the time since the previous sample.
+    """
+
+    def __init__(self):
+        self.process = psutil.Process()
+        self.num_cpus = psutil.cpu_count() or 1
+        self.reset()
+
+    def reset(self):
+        psutil.cpu_percent(interval=None)
+        self.process.cpu_percent(interval=None)
+        self._last_time = time.perf_counter()
+
+    def sample(self):
+        system_cpu = psutil.cpu_percent(interval=None)
+        own_cpu = self.process.cpu_percent(interval=None) / self.num_cpus
+        now = time.perf_counter()
+        window = now - self._last_time
+        self._last_time = now
+
+        return {
+            "cpu_percent": system_cpu,
+            "own_cpu_percent": round(own_cpu, 2),
+            "external_cpu_percent": round(max(0.0, system_cpu - own_cpu), 2),
+            "ram_percent": psutil.virtual_memory().percent,
+            "window_seconds": round(window, 3)
+        }
+
+
 def measure_activation_handoff(
     tensor: torch.Tensor,
     stage_id: int,

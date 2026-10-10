@@ -71,7 +71,10 @@ def generate_partitioned_response(
     strategy=0,
     max_new_tokens: int = 100,
     do_sample: bool = False,
-    return_token_ids: bool = False
+    return_token_ids: bool = False,
+    scheduler=None,
+    decision_interval: int = 10,
+    decision_log: list | None = None
 ):
     """
     Executes autoregressive generation using explicit single-node layer-wise partitioning.
@@ -80,29 +83,40 @@ def generate_partitioned_response(
     with each stage running under its own intra-op thread budget, and measures
     activation handoffs at the boundaries between stages.
 
+    Intra-generation re-scheduling: if `scheduler` is given, it is asked for a
+    strategy before the first token and again every `decision_interval` tokens
+    (scheduler.decide(step=..., prompt=..., input_tokens=...) -> strategy).
+    All strategies share the same weights and KV cache, so switching mid-request
+    costs nothing and does not change the generated tokens.
+
     Args:
         prompt: User prompt string.
         strategy: Strategy ID (0, 1, 2) or PartitionStrategy instance or name.
+            Ignored when a scheduler is given.
         max_new_tokens: Maximum tokens to generate (default: 100).
         do_sample: Deterministic (False) or sampling.
         return_token_ids: Also return the generated token IDs.
+        scheduler: Optional policy object that re-selects the strategy during generation.
+        decision_interval: Tokens between scheduler decisions.
+        decision_log: Optional list that receives one dict per scheduler decision.
 
     Returns:
         tuple: (decoded_response_string, stage_telemetry_records_list[, generated_token_ids])
     """
     tokenizer, model = get_model()
 
-    if not isinstance(strategy, PartitionStrategy):
-        strat_obj = apply_partition_strategy(strategy)
-    else:
-        strat_obj = strategy
+    def resolve(s):
+        return s if isinstance(s, PartitionStrategy) else apply_partition_strategy(s)
 
+    strat_obj = resolve(strategy)
     layer_ranges = strat_obj.get_layer_ranges()
     stage_threads = strat_obj.get_thread_counts()
     num_stages = len(layer_ranges)
 
     inputs = tokenizer(_format_prompt(tokenizer, prompt), return_tensors="pt")
     input_ids = inputs["input_ids"]
+    # Raw prompt token count: the input_tokens feature used in training
+    prompt_tokens = len(tokenizer.encode(prompt)) if scheduler is not None else None
 
     stage_metrics = []
     generated_tokens = []
@@ -114,6 +128,21 @@ def generate_partitioned_response(
             past_key_values = DynamicCache(config=model.config)
 
             for step in range(max_new_tokens):
+                if scheduler is not None and step % decision_interval == 0:
+                    t_decide = time.perf_counter()
+                    strat_obj = resolve(scheduler.decide(step=step, prompt=prompt, input_tokens=prompt_tokens))
+                    layer_ranges = strat_obj.get_layer_ranges()
+                    stage_threads = strat_obj.get_thread_counts()
+                    num_stages = len(layer_ranges)
+                    if decision_log is not None:
+                        decision_log.append({
+                            "step": step,
+                            "strategy_id": strat_obj.strategy_id,
+                            "strategy": strat_obj.strategy_name,
+                            "decision_overhead_seconds": round(time.perf_counter() - t_decide, 6),
+                            **getattr(scheduler, "last_telemetry", {})
+                        })
+
                 if step == 0:
                     seq_ids = curr_input_ids
                     position_ids = torch.arange(seq_ids.shape[1], device=seq_ids.device).unsqueeze(0)
@@ -165,6 +194,8 @@ def generate_partitioned_response(
                         stage_latency_seconds=stage_duration,
                         num_threads=num_threads
                     )
+                    handoff_record["token_step"] = step
+                    handoff_record["strategy_id"] = strat_obj.strategy_id
                     stage_metrics.append(handoff_record)
 
                 hidden_states = model.model.norm(hidden_states)
