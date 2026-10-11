@@ -117,6 +117,17 @@ class DQNAgent:
 
         return int(torch.argmax(q_values).item())
 
+    def q_values(self, state):
+        """Greedy Q-value estimate for every action."""
+
+        state_tensor = torch.tensor(
+            state,
+            dtype=torch.float32
+        ).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            return self.model(state_tensor).squeeze(0).cpu().numpy()
+
     def train_step(self, batch_size=32):
         """
         Train the DQN using a random batch

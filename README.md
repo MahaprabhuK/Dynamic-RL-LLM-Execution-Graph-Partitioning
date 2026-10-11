@@ -68,7 +68,8 @@ python -m src.rl.train --csv data/processed/fixed_strategy_metrics_v3.csv --tag 
 python evaluate_rl_policy.py --prompt-offset 20 --num-prompts 10 --loads 0,4,8
 
 # 5. Intra-generation re-scheduling under changing load (see below)
-python evaluate_adaptive.py --num-prompts 3 --prompt-offset 20 --max-new-tokens 60
+#    10 prompts x 4 scenarios x 7 conditions, 200 tokens each (~2.5 h on CPU)
+python evaluate_adaptive.py --num-prompts 10 --prompt-offset 20 --max-new-tokens 200
 
 # Fast tests (no model needed)
 python -m pytest tests/test_pipeline.py tests/test_adaptive.py
@@ -83,17 +84,55 @@ the engine can switch strategy *between tokens* at no cost and with identical
 output. `generate_partitioned_response(scheduler=..., decision_interval=N)`
 asks a policy (`src/scheduler/adaptive.py`) for a strategy every N tokens.
 
-- Live telemetry (`ExternalLoadMonitor`) subtracts this process's own CPU usage
-  from system CPU, so the policy reacts to *external* contention rather than to
-  its own inference threads, matching the pre-run feature it was trained on.
-- `evaluate_adaptive.py` replays load scenarios that change mid-request
-  (`steady_idle`, `steady_heavy`, `spike`, `relief`; `DynamicCPULoad`) and
-  compares fixed strategies, a threshold rule and the DQN, each run once per
-  request (`*_once`) and re-deciding during generation (`*_adaptive`).
-- Outputs: `data/processed/adaptive_*_v3.csv` and `results/adaptive_*_v3.png`,
-  including a per-token timeline of a load spike.
+- Live telemetry (`BackgroundLoadSampler`) runs in a daemon thread and
+  subtracts this process's own CPU usage from system CPU, so the policy reacts
+  to *external* contention rather than to its own inference threads. Reading
+  it never blocks generation.
+- Hysteresis (`patience`): a policy only switches after proposing the new
+  strategy in consecutive decisions, which prevents flapping on noisy readings.
+- **Online bandit (`OnlineBanditPolicy`).** Each decision interval is one
+  bandit round: context = external-load bin, arm = strategy, cost = the
+  measured seconds per token of the segment just generated. It is warm-started
+  from the offline DQN's Q-values, uses discounted estimates so stale data is
+  forgotten when the machine's behaviour drifts, and re-checks other
+  strategies with a UCB-style bonus, at the cost of one segment. One instance
+  keeps learning across all requests.
+- `evaluate_adaptive.py` replays load scenarios whose load changes after a
+  fixed number of generated tokens (`steady_idle`, `steady_heavy`, `spike`,
+  `relief`; `TokenScheduledLoad`), so every policy faces the change at the
+  same point. All runs generate exactly `--max-new-tokens` tokens. It compares
+  the three fixed strategies, a threshold rule, the DQN once per request
+  (`rl_once`) and re-deciding (`rl_adaptive`), and the online bandit.
+- Outputs: `data/processed/adaptive_*_v4.csv` and `results/adaptive_*_v4.png`,
+  including per-token timelines of a load spike and a load relief.
 
-Outputs go to `data/processed/*_v3.csv` and `results/*_v3.png`.
+### v4 results (10 prompts x 4 scenarios, 200 tokens, paired)
+
+Two contexts with memory-paging stalls (a run > 2x the scenario median) are
+excluded by `stalled_contexts()`; raw data is kept. Generated tokens were
+identical across all conditions in 100% of contexts.
+
+- The online bandit is significantly faster than the per-request DQN
+  (`rl_once`) when load changes mid-request: -7.8% in `spike`, -7.0% in
+  `relief`. It is also significantly faster than `rl_adaptive` in `spike` and
+  `steady_heavy`, and than the threshold rule in three scenarios.
+- It corrected a stale offline model. The v3 data said balanced (3+3 threads)
+  wins under load. On the machine at evaluation time, the 6-thread
+  `latency_optimized` strategy won everywhere; the DQN kept choosing balanced,
+  while the bandit moved to it. Its regret against the best fixed strategy in
+  hindsight is 0.3-1.2 s per request, against 0.9-2.1 s for the DQN, and fell
+  from 0.94 s to 0.66 s between the first and second half of the run.
+- Limitation: because one fixed strategy happened to be near-optimal in every
+  scenario, the bandit only ties it in `spike` and `steady_idle` and is 4-6%
+  slower in `relief` and `steady_heavy`, the cost of its exploration
+  (about 3 switches per request). The bandit's value here is not knowing in
+  advance which fixed strategy is best, which changed between v3 and v4.
+- Decision overhead fell from 0.21 s (v3) to 0.002 s per request.
+
+Re-analyse saved results with `python evaluate_adaptive.py --tag v4 --report-only`.
+
+Results from the earlier v3 adaptive run (60-token requests, time-triggered
+load, blocking telemetry) are kept as `adaptive_*_v3.*`.
 
 ## Methodology notes
 

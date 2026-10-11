@@ -4,7 +4,6 @@ Fast tests for intra-generation re-scheduling (no LLM needed).
     python -m pytest tests/test_adaptive.py -v
 """
 
-import contextlib
 import sys
 import time
 import types
@@ -20,9 +19,9 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.llm.partition import PartitionStrategy
 from src.rl.dqn_agent import DQNAgent
-from src.scheduler.adaptive import FixedPolicy, RLPolicy, ThresholdPolicy
-from src.telemetry.load_generator import DynamicCPULoad
-from src.telemetry.monitor import ExternalLoadMonitor
+from src.scheduler.adaptive import FixedPolicy, OnlineBanditPolicy, RLPolicy, ThresholdPolicy
+from src.telemetry.load_generator import DynamicCPULoad, TokenScheduledLoad
+from src.telemetry.monitor import BackgroundLoadSampler, ExternalLoadMonitor
 
 
 class ScriptedThreshold(ThresholdPolicy):
@@ -74,14 +73,95 @@ def test_dynamic_load_changes_worker_count():
     assert len([c for c in me.children() if c.is_running()]) == 0
 
 
+def test_token_scheduled_load_changes_at_token():
+    me = psutil.Process()
+    load = TokenScheduledLoad([(0, 0), (5, 2)])
+    with load:
+        for step in range(5):
+            load.on_step(step)
+        assert len(me.children()) == 0
+        load.on_step(5)
+        load._thread.join(timeout=5)
+        assert len(me.children()) == 2
+    time.sleep(0.2)
+    assert len([c for c in me.children() if c.is_running()]) == 0
+
+
+def test_background_sampler_reads_without_blocking():
+    with BackgroundLoadSampler(interval=0.1) as sampler:
+        t0 = time.perf_counter()
+        s = sampler.latest()
+        assert time.perf_counter() - t0 < 0.05
+        assert 0 <= s["external_cpu_percent"] <= 100
+
+
+def test_hysteresis_requires_consecutive_proposals():
+    policy = ScriptedThreshold([10, 90, 10, 90, 90, 90], threshold=40, patience=2)
+    chosen = [policy.decide(step=s, prompt="p", input_tokens=3) for s in range(0, 60, 10)]
+    assert chosen == [0, 0, 0, 0, 1, 1]
+
+
+def test_step_zero_starts_new_request():
+    policy = ScriptedThreshold([10, 90], threshold=40, once=True)
+    assert policy.decide(step=0, prompt="p", input_tokens=3) == 0
+    assert policy.decide(step=0, prompt="p", input_tokens=3) == 1
+
+
+class ScriptedSampler:
+    def __init__(self, cpu):
+        self.cpu = cpu
+
+    def latest(self):
+        return {"external_cpu_percent": self.cpu, "ram_percent": 50.0}
+
+
+def run_bandit_request(bandit, cost_of, tokens=50, interval=10, clock=None):
+    """Drive the bandit like the engine would, with a fake clock: cost_of[action] sec/token."""
+    chosen = []
+    for step in range(0, tokens, interval):
+        a = bandit.decide(step=step, prompt="p", input_tokens=3)
+        chosen.append(a)
+        clock[0] += cost_of[a] * interval
+    return chosen
+
+
+def test_online_bandit_learns_best_arm_and_adapts(monkeypatch):
+    import src.scheduler.adaptive as adaptive
+
+    clock = [0.0]
+    monkeypatch.setattr(adaptive.time, "perf_counter", lambda: clock[0])
+    sampler = ScriptedSampler(80.0)
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=sampler, seed=0)
+
+    for _ in range(20):
+        run_bandit_request(bandit, {0: 0.3, 1: 0.1, 2: 0.2}, clock=clock)
+    assert bandit.decide(step=0, prompt="p", input_tokens=3) == 1
+
+    # The machine drifts: strategy 2 becomes the best one in the same load bin
+    for _ in range(40):
+        run_bandit_request(bandit, {0: 0.3, 1: 0.2, 2: 0.05}, clock=clock)
+    picks = [a for _ in range(5) for a in run_bandit_request(bandit, {0: 0.3, 1: 0.2, 2: 0.05}, clock=clock)]
+    assert picks.count(2) / len(picks) > 0.7
+
+
+def test_online_bandit_uses_dqn_prior():
+    agent = DQNAgent()
+    bandit = OnlineBanditPolicy(prior_agent=agent, sampler=ScriptedSampler(10.0))
+    bandit.decide(step=0, prompt="hello", input_tokens=2)
+    assert (bandit.weights[0] == bandit.prior_weight).all()
+    assert "est_spt_0" in bandit.last_telemetry
+
+
 # ---------------------------------------------------------------------------
 # End-to-end adaptive evaluation with a stubbed LLM
 # ---------------------------------------------------------------------------
 
 def fake_generate(prompt, strategy=0, max_new_tokens=100, do_sample=False, return_token_ids=False,
-                  scheduler=None, decision_interval=10, decision_log=None):
+                  scheduler=None, decision_interval=10, decision_log=None, step_callback=None, ignore_eos=False):
     stages, current = [], PartitionStrategy(strategy)
     for step in range(max_new_tokens):
+        if step_callback is not None:
+            step_callback(step)
         if scheduler is not None and step % decision_interval == 0:
             current = PartitionStrategy(scheduler.decide(step=step, prompt=prompt, input_tokens=3))
             if decision_log is not None:
@@ -91,6 +171,20 @@ def fake_generate(prompt, strategy=0, max_new_tokens=100, do_sample=False, retur
                        "handoff_latency_seconds": 0.0, "activation_size_mb": 0.0})
     ids = list(range(max_new_tokens))
     return ("fake", stages, ids) if return_token_ids else ("fake", stages)
+
+
+class NoLoad:
+    def __init__(self, schedule):
+        pass
+
+    def on_step(self, step):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
 
 
 def test_adaptive_evaluation_pipeline(tmp_path, monkeypatch):
@@ -106,15 +200,26 @@ def test_adaptive_evaluation_pipeline(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ea, "ROOT_DIR", tmp_path)
     monkeypatch.setattr(ea, "generate_partitioned_response", fake_generate)
-    monkeypatch.setattr(ea, "DynamicCPULoad", lambda schedule: contextlib.nullcontext())
+    monkeypatch.setattr(ea, "TokenScheduledLoad", NoLoad)
     monkeypatch.setattr(ea, "time", types.SimpleNamespace(sleep=lambda s: None, perf_counter=time.perf_counter))
 
     df = ea.run_adaptive_evaluation(model_path="data/processed/dqn.pth", num_prompts=1, prompt_offset=1,
                                     max_new_tokens=30, decision_interval=10, tag="t")
 
-    assert set(df["condition"]) == {"static", "latency_optimized", "rule_once", "rule_adaptive",
-                                    "rl_once", "rl_adaptive"}
+    assert set(df["condition"]) == {"static", "balanced", "latency_optimized", "rule_adaptive",
+                                    "rl_once", "rl_adaptive", "bandit_adaptive"}
     assert set(df["scenario"]) == {"steady_idle", "steady_heavy", "spike", "relief"}
-    assert (df[df["condition"].str.endswith("_once")]["num_switches"] == 0).all()
+    assert (df[df["condition"] == "rl_once"]["num_switches"] == 0).all()
     assert (df[df["condition"].str.endswith("_adaptive")]["num_decisions"] == 3).all()
     assert (data_dir / "adaptive_paired_diffs_t.csv").exists()
+    assert (data_dir / "adaptive_bandit_history_t.csv").exists()
+
+    # Resume: drop the last context, rerun, and only that context is redone
+    last = df["context_id"].max()
+    df[df["context_id"] != last].to_csv(data_dir / "adaptive_runs_t.csv", index=False)
+    resumed = ea.run_adaptive_evaluation(model_path="data/processed/dqn.pth", num_prompts=1, prompt_offset=1,
+                                         max_new_tokens=30, decision_interval=10, tag="t", resume=True)
+    assert len(resumed) == len(df)
+    assert list(resumed[resumed["context_id"] == last]["condition"]) == list(df[df["context_id"] == last]["condition"])
+
+

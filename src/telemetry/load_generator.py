@@ -97,6 +97,52 @@ class DynamicCPULoad:
         return False
 
 
+class TokenScheduledLoad(DynamicCPULoad):
+    """
+    Background load that changes after a given number of generated TOKENS
+    rather than seconds, so every policy faces the change at the same point of
+    the response regardless of how fast it is. Pass `on_step` as the
+    generator's step_callback.
+
+        load = TokenScheduledLoad([(0, 0), (60, 8)])   # 8 workers from token 60
+        with load:
+            generate_partitioned_response(..., step_callback=load.on_step)
+
+    Workers are started in a background thread so the generator never blocks.
+    """
+
+    def __init__(self, schedule):
+        super().__init__(schedule)
+        self._next = 0
+
+    def _apply_async(self, workers):
+        import threading
+
+        self._thread = threading.Thread(target=self._set_workers, args=(workers,), daemon=True)
+        self._thread.start()
+
+    def on_step(self, step):
+        while self._next < len(self.schedule) and step >= self.schedule[self._next][0]:
+            self._apply_async(self.schedule[self._next][1])
+            self._next += 1
+
+    def __enter__(self):
+        self._next = 0
+        if self.schedule and self.schedule[0][0] <= 0:
+            self._set_workers(self.schedule[0][1])
+            self._next = 1
+            if self.schedule[0][1] > 0:
+                time.sleep(0.5)
+        return self
+
+    def __exit__(self, *exc):
+        if self._thread is not None:
+            self._thread.join(timeout=10)
+            self._thread = None
+        self._set_workers(0)
+        return False
+
+
 if __name__ == "__main__":
     import psutil
 

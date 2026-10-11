@@ -14,7 +14,8 @@ COLORS = {
     "rule_once": "#a6761d",
     "rule_adaptive": "#e6ab02",
     "rl_once": "#66a61e",
-    "rl_adaptive": "#e7298a"
+    "rl_adaptive": "#e7298a",
+    "bandit_adaptive": "#1b9e77"
 }
 
 

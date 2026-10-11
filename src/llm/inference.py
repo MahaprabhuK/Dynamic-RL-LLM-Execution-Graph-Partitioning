@@ -74,7 +74,9 @@ def generate_partitioned_response(
     return_token_ids: bool = False,
     scheduler=None,
     decision_interval: int = 10,
-    decision_log: list | None = None
+    decision_log: list | None = None,
+    step_callback=None,
+    ignore_eos: bool = False
 ):
     """
     Executes autoregressive generation using explicit single-node layer-wise partitioning.
@@ -99,6 +101,8 @@ def generate_partitioned_response(
         scheduler: Optional policy object that re-selects the strategy during generation.
         decision_interval: Tokens between scheduler decisions.
         decision_log: Optional list that receives one dict per scheduler decision.
+        step_callback: Optional function called with the step index before each token.
+        ignore_eos: Keep generating until max_new_tokens (fixed-length benchmarks).
 
     Returns:
         tuple: (decoded_response_string, stage_telemetry_records_list[, generated_token_ids])
@@ -128,6 +132,9 @@ def generate_partitioned_response(
             past_key_values = DynamicCache(config=model.config)
 
             for step in range(max_new_tokens):
+                if step_callback is not None:
+                    step_callback(step)
+
                 if scheduler is not None and step % decision_interval == 0:
                     t_decide = time.perf_counter()
                     strat_obj = resolve(scheduler.decide(step=step, prompt=prompt, input_tokens=prompt_tokens))
@@ -211,7 +218,7 @@ def generate_partitioned_response(
                 generated_tokens.append(next_token_item)
                 curr_input_ids = torch.cat([curr_input_ids, next_token], dim=-1)
 
-                if next_token_item == tokenizer.eos_token_id:
+                if next_token_item == tokenizer.eos_token_id and not ignore_eos:
                     break
     finally:
         torch.set_num_threads(original_threads)

@@ -59,6 +59,91 @@ class ExternalLoadMonitor:
         }
 
 
+class BackgroundLoadSampler:
+    """
+    Continuously samples external CPU load in a daemon thread, so a scheduler
+    can read the current load at any time without blocking generation.
+
+    Uses raw cpu_times() deltas (not psutil.cpu_percent), so it does not
+    interfere with other psutil users, and smooths readings with an EMA.
+
+        with BackgroundLoadSampler() as sampler:
+            sampler.latest()["external_cpu_percent"]
+    """
+
+    def __init__(self, interval: float = 0.25, smoothing: float = 0.5):
+        self.interval = interval
+        self.smoothing = smoothing
+        self.process = psutil.Process()
+        self.num_cpus = psutil.cpu_count() or 1
+        self._latest = None
+        self._lock = None
+        self._stop = None
+        self._thread = None
+
+    @staticmethod
+    def _busy_and_total(t):
+        total = sum(t)
+        return total - t.idle, total
+
+    def _run(self):
+        last_sys = self._busy_and_total(psutil.cpu_times())
+        last_own = sum(self.process.cpu_times()[:2])
+        last_time = time.perf_counter()
+
+        while not self._stop.wait(self.interval):
+            busy, total = self._busy_and_total(psutil.cpu_times())
+            own = sum(self.process.cpu_times()[:2])
+            now = time.perf_counter()
+
+            system_cpu = 100.0 * (busy - last_sys[0]) / max(total - last_sys[1], 1e-9)
+            own_cpu = 100.0 * (own - last_own) / max((now - last_time) * self.num_cpus, 1e-9)
+            external = min(100.0, max(0.0, system_cpu - own_cpu))
+            last_sys, last_own, last_time = (busy, total), own, now
+
+            with self._lock:
+                prev = self._latest
+                a = self.smoothing if prev is not None else 1.0
+                ema = lambda key, value: value if prev is None else a * value + (1 - a) * prev[key]
+                self._latest = {
+                    "cpu_percent": round(ema("cpu_percent", system_cpu), 2),
+                    "own_cpu_percent": round(ema("own_cpu_percent", own_cpu), 2),
+                    "external_cpu_percent": round(ema("external_cpu_percent", external), 2),
+                    "ram_percent": psutil.virtual_memory().percent,
+                    "window_seconds": self.interval
+                }
+
+    def start(self):
+        import threading
+
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        time.sleep(self.interval * 2.5)  # first readings
+        return self
+
+    def stop(self):
+        if self._thread is not None:
+            self._stop.set()
+            self._thread.join(timeout=5)
+            self._thread = None
+
+    def latest(self):
+        with self._lock:
+            if self._latest is None:
+                return {"cpu_percent": 0.0, "own_cpu_percent": 0.0, "external_cpu_percent": 0.0,
+                        "ram_percent": psutil.virtual_memory().percent, "window_seconds": 0.0}
+            return dict(self._latest)
+
+    def __enter__(self):
+        return self.start()
+
+    def __exit__(self, *exc):
+        self.stop()
+        return False
+
+
 def measure_activation_handoff(
     tensor: torch.Tensor,
     stage_id: int,
