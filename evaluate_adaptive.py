@@ -55,16 +55,24 @@ from src.telemetry.monitor import BackgroundLoadSampler
 FIXED = ["static", "balanced", "latency_optimized"]
 
 
-def make_scenarios(heavy: int, switch_token: int):
-    return {
+def make_scenarios(heavy: int, switch_token: int, ramp=None):
+    scenarios = {
         "steady_idle": [(0, 0)],
         "steady_heavy": [(0, heavy)],
         "spike": [(0, 0), (switch_token, heavy)],
         "relief": [(0, heavy), (switch_token, 0)]
     }
+    if ramp:
+        scenarios["ramp"] = [(0, 0)] + list(ramp)
+    return scenarios
 
 
-def make_policies(agent, threshold, sampler, patience=2, seed=0):
+def parse_ramp(text):
+    """'60:8,140:12' -> [(60, 8), (140, 12)] (token, workers)."""
+    return [tuple(int(v) for v in part.split(":")) for part in text.split(",")] if text else None
+
+
+def make_policies(agent, threshold, sampler, patience=2, seed=0, bandit_edges=(35.0,), bin_margin=8.0):
     policies = {name: (lambda sid=sid: FixedPolicy(sid))
                 for sid, name in PartitionStrategy.STRATEGIES.items()}
     policies["rule_adaptive"] = lambda: ThresholdPolicy(threshold, sampler=sampler, patience=patience)
@@ -77,7 +85,8 @@ def make_policies(agent, threshold, sampler, patience=2, seed=0):
         prior.model.load_state_dict(agent.model.state_dict())
 
     # The bandit keeps learning across requests: one shared instance
-    bandit = OnlineBanditPolicy(prior_agent=prior, sampler=sampler, seed=seed)
+    bandit = OnlineBanditPolicy(prior_agent=prior, sampler=sampler, seed=seed, edges=bandit_edges,
+                                bin_margin=bin_margin)
     policies["bandit_adaptive"] = lambda: bandit
     return policies, bandit
 
@@ -94,7 +103,10 @@ def run_adaptive_evaluation(
     patience=2,
     seed=11,
     tag="v4",
-    resume=False
+    resume=False,
+    ramp=None,
+    bandit_edges=(35.0,),
+    bin_margin=8.0
 ):
     data_dir = ROOT_DIR / "data" / "processed"
     results_dir = ROOT_DIR / "results"
@@ -109,14 +121,15 @@ def run_adaptive_evaluation(
         print(f"No DQN model at {model_path}; RL conditions skipped, bandit starts without a prior.", flush=True)
 
     rng = np.random.default_rng(seed)
-    scenarios = make_scenarios(heavy, switch_token)
+    scenarios = make_scenarios(heavy, switch_token, ramp)
     prompts = load_prompts(csv_path=str(data_dir / "prompts.csv"), limit=prompt_offset + num_prompts)[prompt_offset:]
 
     contexts = [(prompt_offset + i + 1, p, s) for i, p in enumerate(prompts) for s in scenarios]
     rng.shuffle(contexts)
 
     sampler = BackgroundLoadSampler().start()
-    policies, bandit = make_policies(agent, threshold, sampler, patience=patience, seed=seed)
+    policies, bandit = make_policies(agent, threshold, sampler, patience=patience, seed=seed,
+                                     bandit_edges=bandit_edges, bin_margin=bin_margin)
     # Drawn up front so a resumed run replays exactly the same condition orders
     orders = [rng.permutation(list(policies)) for _ in contexts]
 
@@ -225,11 +238,12 @@ def _only(diffs, condition):
 def stalled_contexts(df, ratio=2.0, min_excess_seconds=5.0):
     """
     Contexts in which any run took more than `ratio` x the median latency of
-    its scenario (and at least `min_excess_seconds` longer). On a RAM-constrained
-    machine these are memory-paging stalls (the whole process freezes), which
-    say nothing about the schedulers.
+    the same condition in the same scenario (and at least `min_excess_seconds`
+    longer). On a RAM-constrained machine these are memory-paging stalls (the
+    whole process freezes at random), which say nothing about the schedulers.
+    A policy that is slow every time (e.g. oversubscription) is not flagged.
     """
-    median = df.groupby("scenario")["latency_seconds"].transform("median")
+    median = df.groupby(["scenario", "condition"])["latency_seconds"].transform("median")
     stalled = (df["latency_seconds"] > ratio * median) & (df["latency_seconds"] > median + min_excess_seconds)
     return sorted(int(c) for c in df.loc[stalled, "context_id"].unique())
 
@@ -237,8 +251,8 @@ def stalled_contexts(df, ratio=2.0, min_excess_seconds=5.0):
 def report_adaptive_results(df, df_timeline, data_dir, results_dir, tag, stall_ratio=2.0):
     stalled = stalled_contexts(df, stall_ratio) if stall_ratio else []
     if stalled:
-        print(f"\nExcluding {len(stalled)} context(s) with paging stalls (a run > {stall_ratio}x the scenario "
-              f"median): {stalled}. Raw data is kept in adaptive_runs_{tag}.csv.", flush=True)
+        print(f"\nExcluding {len(stalled)} context(s) with paging stalls (a run > {stall_ratio}x the median of "
+              f"its condition and scenario): {stalled}. Raw data is kept in adaptive_runs_{tag}.csv.", flush=True)
         df = df[~df["context_id"].isin(stalled)]
         df_timeline = df_timeline[~df_timeline["context_id"].isin(stalled)]
 
@@ -316,6 +330,9 @@ if __name__ == "__main__":
     parser.add_argument("--tag", default="v4")
     parser.add_argument("--resume", action="store_true", help="Continue an interrupted run with the same tag.")
     parser.add_argument("--report-only", action="store_true", help="Re-analyse saved results without running.")
+    parser.add_argument("--ramp", default="", help="Extra 'ramp' scenario from idle, e.g. '60:8,140:12' (token:workers).")
+    parser.add_argument("--bandit-edges", default="35", help="External CPU %% bin edges of the online bandit.")
+    parser.add_argument("--bin-margin", type=float, default=8.0, help="Bandit bin hysteresis in CPU %% points.")
     args = parser.parse_args()
 
     if args.report_only:
@@ -337,5 +354,8 @@ if __name__ == "__main__":
         patience=args.patience,
         seed=args.seed,
         tag=args.tag,
-        resume=args.resume
+        resume=args.resume,
+        ramp=parse_ramp(args.ramp),
+        bandit_edges=tuple(float(e) for e in args.bandit_edges.split(",")),
+        bin_margin=args.bin_margin
     )

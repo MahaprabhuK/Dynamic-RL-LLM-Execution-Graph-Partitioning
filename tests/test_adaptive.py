@@ -9,6 +9,7 @@ import time
 import types
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import psutil
 import pytest
@@ -142,6 +143,35 @@ def test_online_bandit_learns_best_arm_and_adapts(monkeypatch):
         run_bandit_request(bandit, {0: 0.3, 1: 0.2, 2: 0.05}, clock=clock)
     picks = [a for _ in range(5) for a in run_bandit_request(bandit, {0: 0.3, 1: 0.2, 2: 0.05}, clock=clock)]
     assert picks.count(2) / len(picks) > 0.7
+
+
+def test_online_bandit_ignores_stalls_but_accepts_regime_change(monkeypatch):
+    import src.scheduler.adaptive as adaptive
+
+    clock = [0.0]
+    monkeypatch.setattr(adaptive.time, "perf_counter", lambda: clock[0])
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=ScriptedSampler(80.0), seed=0, regime_after=5)
+    for _ in range(10):
+        run_bandit_request(bandit, {0: 0.1, 1: 0.1, 2: 0.1}, clock=clock)
+    before = bandit.estimates(1).copy()
+
+    run_bandit_request(bandit, {0: 2.0, 1: 2.0, 2: 2.0}, tokens=30, clock=clock)  # one 2-segment stall
+    assert np.allclose(bandit.estimates(1), before)
+    assert not bandit.history[-1]["accepted"]
+
+    run_bandit_request(bandit, {0: 2.0, 1: 2.0, 2: 2.0}, tokens=100, clock=clock)  # persistent slowdown
+    assert bandit.history[-1]["accepted"]
+
+
+def test_online_bandit_bin_hysteresis():
+    sampler = ScriptedSampler(20.0)
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=sampler, edges=(35.0,), bin_margin=8.0)
+    bins = []
+    for step, cpu in zip(range(0, 50, 10), [20, 38, 41, 30, 45]):
+        sampler.cpu = cpu
+        bandit.decide(step=step, prompt="p", input_tokens=3)
+        bins.append(bandit.last_telemetry["context_bin"])
+    assert bins == [0, 0, 0, 0, 1]
 
 
 def test_online_bandit_uses_dqn_prior():

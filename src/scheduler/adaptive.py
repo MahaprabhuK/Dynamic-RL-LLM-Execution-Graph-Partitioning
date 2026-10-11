@@ -144,12 +144,21 @@ class OnlineBanditPolicy(AdaptivePolicy):
       tried recently get a growing bonus and are eventually re-checked, for
       the price of one segment.
 
+    - Robust feedback: a segment more than `outlier_ratio` x slower than the
+      best established estimate in its bin is treated as a stall (e.g. memory
+      paging) and ignored, unless `regime_after` such segments arrive in a
+      row, which is taken as a genuine change: the bin is reset and relearned.
+    - Stable contexts: the load bin only changes within a request when the
+      reading moves more than `bin_margin` points past the bin edge, so noise
+      around an edge does not flip between bins.
+
     The first segment of a request is not used as feedback because it contains
     the prompt prefill. Create one instance and reuse it across requests.
     """
 
-    def __init__(self, prior_agent=None, edges=(35.0, 55.0), discount=0.95, prior_weight=2.0, bonus=0.1,
-                 sec_per_token_ref=0.5, sampler=None, seed=0):
+    def __init__(self, prior_agent=None, edges=(35.0,), discount=0.98, prior_weight=2.0, bonus=0.08,
+                 sec_per_token_ref=0.5, sampler=None, seed=0, outlier_ratio=2.0, regime_after=5,
+                 bin_margin=8.0):
         super().__init__(once=False, sampler=sampler)
         self.prior_agent = prior_agent
         if prior_agent is not None:
@@ -162,18 +171,38 @@ class OnlineBanditPolicy(AdaptivePolicy):
         self.actions = sorted(PartitionStrategy.STRATEGIES)
         self.sums = {}     # bin -> np.array of discounted cost sums
         self.weights = {}  # bin -> np.array of discounted counts
+        self.outlier_ratio = outlier_ratio
+        self.regime_after = regime_after
+        self.bin_margin = bin_margin
+        self.counts = {}   # bin -> np.array of real (undiscounted) observation counts
         self.rng = random.Random(seed)
         self._pending = None
+        self._bin = None
+        self._rejected = {}
         self.history = []
 
     def context_bin(self, telemetry):
-        return int(np.searchsorted(self.edges, telemetry["external_cpu_percent"]))
+        cpu = telemetry["external_cpu_percent"]
+        b = int(np.searchsorted(self.edges, cpu))
+        prev = self._bin
+        if prev is not None and b != prev:
+            edge = self.edges[min(b, prev)]
+            if abs(cpu - edge) < self.bin_margin:
+                b = prev
+        return b
+
+    def is_outlier(self, b, sec_per_token):
+        established = self.counts[b] >= 3
+        if not established.any():
+            return False
+        reference = np.nanmin(self.estimates(b)[established])
+        return sec_per_token > self.outlier_ratio * reference
 
     def _ensure_bin(self, b, prompt, input_tokens, telemetry):
         if b in self.sums:
             return
         n = len(self.actions)
-        self.sums[b], self.weights[b] = np.zeros(n), np.zeros(n)
+        self.sums[b], self.weights[b], self.counts[b] = np.zeros(n), np.zeros(n), np.zeros(n)
         if self.prior_agent is not None:
             state = build_state(prompt_length=len(prompt), input_tokens=input_tokens,
                                 cpu_percent=telemetry["external_cpu_percent"], ram_percent=telemetry["ram_percent"])
@@ -191,6 +220,7 @@ class OnlineBanditPolicy(AdaptivePolicy):
         self.weights[b] *= self.discount
         self.sums[b][i] += sec_per_token
         self.weights[b][i] += 1.0
+        self.counts[b][i] += 1
 
     def select(self, b):
         w = self.weights[b]
@@ -205,16 +235,24 @@ class OnlineBanditPolicy(AdaptivePolicy):
     def decide(self, step, prompt, input_tokens):
         now = time.perf_counter()
         if step == 0:
-            self._pending = None
+            self._pending, self._bin = None, None
         elif self._pending is not None:
             b, action, t0, s0 = self._pending
             if s0 > 0 and step > s0:
                 spt = (now - t0) / (step - s0)
-                self.update(b, action, spt)
-                self.history.append({"bin": b, "action": action, "sec_per_token": spt})
+                outlier = self.is_outlier(b, spt)
+                self._rejected[b] = self._rejected.get(b, 0) + 1 if outlier else 0
+                accepted = not outlier or self._rejected[b] >= self.regime_after
+                if outlier and accepted:
+                    # Persistent, not a stall: the bin's old estimates are obsolete
+                    self.sums[b], self.weights[b], self.counts[b] = (np.zeros(len(self.actions)) for _ in range(3))
+                if accepted:
+                    self.update(b, action, spt)
+                    self._rejected[b] = 0
+                self.history.append({"bin": b, "action": action, "sec_per_token": spt, "accepted": accepted})
 
         telemetry = self.observe(step)
-        b = self.context_bin(telemetry)
+        b = self._bin = self.context_bin(telemetry)
         self._ensure_bin(b, prompt, input_tokens, telemetry)
         action = self.select(b)
 
@@ -231,9 +269,12 @@ class OnlineBanditPolicy(AdaptivePolicy):
     def state_dict(self):
         return {"sums": {str(b): v.tolist() for b, v in self.sums.items()},
                 "weights": {str(b): v.tolist() for b, v in self.weights.items()},
+                "counts": {str(b): v.tolist() for b, v in self.counts.items()},
                 "history": self.history}
 
     def load_state_dict(self, state):
         self.sums = {int(b): np.array(v) for b, v in state["sums"].items()}
         self.weights = {int(b): np.array(v) for b, v in state["weights"].items()}
+        self.counts = {int(b): np.array(v) for b, v in state.get("counts", {}).items()} or \
+            {b: np.zeros(len(self.actions)) for b in self.sums}
         self.history = list(state.get("history", []))

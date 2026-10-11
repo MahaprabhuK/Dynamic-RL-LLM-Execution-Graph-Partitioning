@@ -131,6 +131,40 @@ identical across all conditions in 100% of contexts.
 
 Re-analyse saved results with `python evaluate_adaptive.py --tag v4 --report-only`.
 
+### Load sweep and v5 protocol
+
+`pilot_load_sweep.py` measures decode seconds per token for every strategy at
+0-14 busy workers (`data/processed/load_sweep_v4.csv`). On this machine there
+are three regimes:
+
+| Busy workers | External CPU reading | Best strategy |
+|---|---|---|
+| 0-6 | 7-49% | `static` (10 threads) |
+| 8 | 54-60% | `latency_optimized` (6 threads) |
+| 10-14 | 66-89% | `balanced` (3+3 threads); at 12 workers `static` oversubscribes the CPU and slows down about 20x |
+
+The v5 run adds a `ramp` scenario (idle, then 8 workers from token 60, then 12
+from token 140), in which no single fixed strategy is best for the whole
+response. It uses 10 workers for the other heavy phases, puts the bandit's
+bin edges at 51% and 63%, and sets the rule threshold at 60%:
+
+```bash
+python evaluate_adaptive.py --tag v5 --num-prompts 8 --heavy 10 --switch-token 60 \
+    --ramp "60:8,140:12" --threshold 60 --bandit-edges "51,63" --bin-margin 4
+```
+
+The v4 diagnostics also changed the bandit:
+
+- Memory-paging stalls had poisoned the bandit's estimates. Segments more
+  than 2x slower than the best established estimate are now ignored, unless
+  they persist, in which case the bin is reset.
+- Readings near a bin edge had caused bin flapping, which accounted for 53 of
+  114 switches. Bin hysteresis (`bin_margin`) now prevents it.
+- Slower forgetting (`discount=0.98`) and a smaller exploration bonus
+  (`bonus=0.08`) mean confident arms are re-checked less often.
+- The stall exclusion compares each run with the same condition in the same
+  scenario, so a policy that is slow every time (oversubscription) is kept.
+
 Results from the earlier v3 adaptive run (60-token requests, time-triggered
 load, blocking telemetry) are kept as `adaptive_*_v3.*`.
 
