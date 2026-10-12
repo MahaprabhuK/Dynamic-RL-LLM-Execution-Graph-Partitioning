@@ -102,7 +102,7 @@ def run_ablation(
                         threshold=60.0,
                         sampler=sampler,
                         patience=patience,
-                        emergency_threshold=85.0 if emergency else None,
+                        emergency_cpu=85.0 if emergency else None,
                         emergency_action=1
                     )
                     load = TokenScheduledLoad(sc_schedule)
@@ -115,8 +115,7 @@ def run_ablation(
                             return_token_ids=True,
                             scheduler=policy,
                             decision_interval=interval,
-                            emergency_switch_enabled=emergency,
-                            emergency_factor=3.0,
+                            emergency_latency_factor=3.0 if emergency else None,
                             conservative_strategy=1,
                             step_callback=load.on_step,
                             ignore_eos=True

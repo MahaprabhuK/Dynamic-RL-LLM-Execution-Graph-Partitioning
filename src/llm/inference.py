@@ -14,14 +14,13 @@ if os.path.exists(_torch_lib):
 
 import numpy as np
 import torch
-from src.config import load_config
 from transformers import DynamicCache
 from transformers.masking_utils import create_causal_mask
 
 from src.llm.load_model import load_model, load_tokenizer
 from src.llm.partition import PartitionStrategy, apply_partition_strategy
 from src.data.load_prompts import load_prompts
-from src.telemetry.monitor import measure_activation_handoff
+from src.telemetry.monitor import SegmentPagingTracker, measure_activation_handoff
 
 
 @lru_cache(maxsize=1)
@@ -90,9 +89,10 @@ def generate_partitioned_response(
     decision_log: list | None = None,
     step_callback=None,
     ignore_eos: bool = False,
-    emergency_switch_enabled: bool | None = None,
-    emergency_factor: float | None = None,
-    conservative_strategy: int | str = 1
+    emergency_latency_factor: float | None = None,
+    conservative_strategy: int | str = 1,
+    segment_log: list | None = None,
+    segment_tokens: int = 10
 ):
     """
     Executes autoregressive generation using explicit single-node layer-wise partitioning.
@@ -119,24 +119,34 @@ def generate_partitioned_response(
         decision_log: Optional list that receives one dict per scheduler decision.
         step_callback: Optional function called with the step index before each token.
         ignore_eos: Keep generating until max_new_tokens (fixed-length benchmarks).
+        emergency_latency_factor: Engine latency switch, off when None (the default).
+            If a token takes longer than this factor times the median of the last
+            10 tokens, the next token runs on `conservative_strategy`. Only allowed
+            with an adaptive scheduler; raises ValueError for fixed strategies.
+            Not to be confused with the scheduler's CPU emergency (emergency_cpu),
+            which reacts to external CPU % at decision points.
+        conservative_strategy: Arm used by the latency switch.
+        segment_log: Optional list that receives one paging/RAM record per
+            `segment_tokens` generated tokens (swap in/out, page faults, available MB).
 
     Returns:
         tuple: (decoded_response_string, stage_telemetry_records_list[, generated_token_ids])
     """
     if scheduler is not None and decision_interval <= 0:
         raise ValueError("decision_interval must be positive when a scheduler is used")
+    if emergency_latency_factor is not None:
+        if emergency_latency_factor <= 0:
+            raise ValueError("emergency_latency_factor must be positive (None = off)")
+        if scheduler is None or getattr(scheduler, "is_fixed", False):
+            raise ValueError("The latency emergency switch is only allowed with an adaptive scheduler, "
+                             "not with a fixed strategy")
+    if segment_tokens <= 0:
+        raise ValueError("segment_tokens must be positive")
 
     tokenizer, model = get_model()
 
     def resolve(s):
         return s if isinstance(s, PartitionStrategy) else apply_partition_strategy(s)
-
-    cfg = load_config()
-    em_cfg = cfg.get("emergency_switch", {})
-    if emergency_switch_enabled is None:
-        emergency_switch_enabled = bool(em_cfg.get("enabled", True))
-    if emergency_factor is None:
-        emergency_factor = float(em_cfg.get("factor", 3.0))
 
     strat_obj = resolve(strategy)
     layer_ranges = strat_obj.get_layer_ranges()
@@ -157,27 +167,39 @@ def generate_partitioned_response(
             curr_input_ids = input_ids.clone()
             past_key_values = DynamicCache(config=model.config)
             recent_token_latencies = deque(maxlen=10)
+            paging = SegmentPagingTracker() if segment_log is not None else None
+            segment_start, t_segment = 0, time.perf_counter()
+            # Emergency kind recorded for the token that runs right after a trigger
+            pending_emergency = None
 
             for step in range(max_new_tokens):
                 t_token_step_start = time.perf_counter()
                 if step_callback is not None:
                     step_callback(step)
 
+                token_emergency = pending_emergency
+                pending_emergency = None
                 if scheduler is not None and step % decision_interval == 0:
                     t_decide = time.perf_counter()
                     strat_obj = resolve(scheduler.decide(step=step, prompt=prompt, input_tokens=prompt_tokens))
                     layer_ranges = strat_obj.get_layer_ranges()
                     stage_threads = strat_obj.get_thread_counts()
                     num_stages = len(layer_ranges)
+                    telemetry = dict(getattr(scheduler, "last_telemetry", {}))
+                    cpu_emergency = bool(telemetry.pop("emergency_switch", False))
+                    if cpu_emergency:
+                        token_emergency = "cpu"
                     if decision_log is not None:
                         decision_log.append({
                             "step": step,
                             "strategy_id": strat_obj.strategy_id,
-                            "strategy": strat_obj.strategy_name,
+                            "strategy": strat_obj.arm_name,
                             "thread_counts": stage_threads,
                             "thread_budget": strat_obj.thread_budget,
                             "decision_overhead_seconds": round(time.perf_counter() - t_decide, 6),
-                            **getattr(scheduler, "last_telemetry", {})
+                            **telemetry,
+                            "emergency_trigger": cpu_emergency,
+                            "emergency_kind": "cpu" if cpu_emergency else ""
                         })
 
                 if step == 0:
@@ -235,6 +257,9 @@ def generate_partitioned_response(
                     )
                     handoff_record["token_step"] = step
                     handoff_record["strategy_id"] = strat_obj.strategy_id
+                    handoff_record["arm"] = strat_obj.arm_name
+                    handoff_record["emergency_trigger"] = token_emergency is not None
+                    handoff_record["emergency_kind"] = token_emergency or ""
                     handoff_record["thread_config_overhead_seconds"] = round(thread_config_overhead, 8)
                     stage_metrics.append(handoff_record)
 
@@ -255,35 +280,49 @@ def generate_partitioned_response(
                 if hasattr(scheduler, "on_token"):
                     scheduler.on_token(step, step_duration)
 
-                # Emergency switch check: if token latency triples recent median, switch immediately to conservative arm
-                if emergency_switch_enabled and len(recent_token_latencies) >= 5 and emergency_factor > 0:
+                # Latency emergency switch (engine): if this token took more than
+                # factor x the median of the last 10, the next token runs on the
+                # conservative arm, bypassing the decision interval and hysteresis.
+                if emergency_latency_factor is not None and len(recent_token_latencies) >= 5:
                     med_latency = float(np.median(recent_token_latencies))
-                    if step_duration > emergency_factor * med_latency and strat_obj.strategy_id != conservative_strategy:
-                        strat_obj = resolve(conservative_strategy)
+                    conservative = resolve(conservative_strategy)
+                    already_conservative = (conservative.strategy_id, tuple(conservative.get_thread_counts())) == \
+                        (strat_obj.strategy_id, tuple(stage_threads))
+                    if step_duration > emergency_latency_factor * med_latency and not already_conservative:
+                        strat_obj = conservative
                         layer_ranges = strat_obj.get_layer_ranges()
                         stage_threads = strat_obj.get_thread_counts()
                         num_stages = len(layer_ranges)
-                        if torch.get_num_threads() != stage_threads[0]:
-                            torch.set_num_threads(stage_threads[0])
+                        pending_emergency = "latency"
                         if hasattr(scheduler, "on_emergency_switch"):
                             scheduler.on_emergency_switch(conservative_strategy)
                         if decision_log is not None:
                             decision_log.append({
-                                "step": step,
+                                "step": step + 1,
                                 "strategy_id": strat_obj.strategy_id,
-                                "strategy": strat_obj.strategy_name,
+                                "strategy": strat_obj.arm_name,
                                 "thread_counts": stage_threads,
                                 "thread_budget": strat_obj.thread_budget,
-                                "emergency_trigger": True,
+                                "decision_overhead_seconds": 0.0,
                                 "token_duration": round(step_duration, 4),
                                 "recent_median": round(med_latency, 4),
-                                "decision_overhead_seconds": 0.0,
-                                **getattr(scheduler, "last_telemetry", {})
+                                "emergency_trigger": True,
+                                "emergency_kind": "latency"
                             })
 
                 recent_token_latencies.append(step_duration)
 
+                if paging is not None and (step + 1 - segment_start >= segment_tokens or step == max_new_tokens - 1):
+                    now = time.perf_counter()
+                    segment_log.append({"segment": len(segment_log), "start_step": segment_start, "end_step": step,
+                                        "segment_seconds": round(now - t_segment, 6), **paging.sample()})
+                    segment_start, t_segment = step + 1, now
+
                 if next_token_item == tokenizer.eos_token_id and not ignore_eos:
+                    if paging is not None and segment_start <= step:
+                        now = time.perf_counter()
+                        segment_log.append({"segment": len(segment_log), "start_step": segment_start, "end_step": step,
+                                            "segment_seconds": round(now - t_segment, 6), **paging.sample()})
                     break
     finally:
         torch.set_num_threads(original_threads)

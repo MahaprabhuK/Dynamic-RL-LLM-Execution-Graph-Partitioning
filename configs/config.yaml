@@ -19,8 +19,13 @@ strategies:
     layer_ranges: [[0, 21]]
     thread_fractions: [0.6]
 
-# Emergency switch: bypasses interval and hysteresis if token latency spikes > 3x recent median
-emergency_switch:
-  enabled: true
+# Two separate emergency mechanisms, both OFF by default:
+# - latency switch (engine, --emergency-latency-factor): if a token takes more than
+#   `factor` x the median of the last 10 tokens, the next token runs on
+#   `conservative_arm`. Only allowed with an adaptive scheduler.
+# - CPU emergency (scheduler, --emergency-cpu): external CPU % at a decision point
+#   that bypasses the policy's hysteresis. Set per run on the command line.
+emergency_latency_switch:
+  enabled: false
   factor: 3.0
-  conservative_strategy: 1
+  conservative_arm: balanced

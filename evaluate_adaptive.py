@@ -91,32 +91,32 @@ def parse_ramp(text):
 
 
 def make_policies(agent, threshold, sampler, patience=2, seed=0, bandit_edges=(35.0,), bin_margin=8.0,
-                  thread_budgets=PartitionStrategy.THREAD_BUDGETS, emergency_threshold=None):
+                  thread_budgets=PartitionStrategy.THREAD_BUDGETS, emergency_cpu=None):
     policies = {name: (lambda sid=sid: FixedPolicy(sid))
                 for sid, name in PartitionStrategy.STRATEGIES.items()}
     policies["rule_adaptive"] = lambda: ThresholdPolicy(
-        threshold, sampler=sampler, patience=patience, emergency_threshold=emergency_threshold,
+        threshold, sampler=sampler, patience=patience, emergency_cpu=emergency_cpu,
         emergency_action=1
     )
     policies["rule_noh"] = lambda: ThresholdPolicy(threshold, sampler=sampler, patience=0,
-                                                    emergency_threshold=emergency_threshold, emergency_action=1)
+                                                    emergency_cpu=emergency_cpu, emergency_action=1)
     policies["cores_heuristic"] = lambda: CoresHeuristicPolicy(
         sampler=sampler, thread_budgets=thread_budgets, patience=patience,
-        emergency_threshold=emergency_threshold
+        emergency_cpu=emergency_cpu
     )
 
     prior = None
     if agent is not None:
         policies["rl_once"] = lambda: RLPolicy(agent, once=True, sampler=sampler)
         policies["rl_adaptive"] = lambda: RLPolicy(agent, sampler=sampler, patience=patience,
-                               emergency_threshold=emergency_threshold, emergency_action=1)
+                               emergency_cpu=emergency_cpu, emergency_action=1)
         DQNAgent = _load_dqn_agent()
         prior = DQNAgent(state_size=agent.state_size, action_size=agent.action_size)
         prior.model.load_state_dict(agent.model.state_dict())
 
     # The bandit keeps learning across requests: one shared instance
     bandit = OnlineBanditPolicy(prior_agent=prior, sampler=sampler, seed=seed, edges=bandit_edges,
-                                bin_margin=bin_margin, emergency_threshold=emergency_threshold)
+                                bin_margin=bin_margin, emergency_cpu=emergency_cpu)
     policies["bandit_adaptive"] = lambda: bandit
     return policies, bandit
 
@@ -138,7 +138,8 @@ def run_adaptive_evaluation(
     bandit_edges=(35.0,),
     bin_margin=8.0,
     thread_budgets=PartitionStrategy.THREAD_BUDGETS,
-    emergency_threshold=None
+    emergency_cpu=None,
+    emergency_latency_factor=None
 ):
     data_dir = ROOT_DIR / "data" / "processed"
     results_dir = ROOT_DIR / "results"
@@ -170,7 +171,7 @@ def run_adaptive_evaluation(
     generate_partitioned_response = _load_inference()
     policies, bandit = make_policies(agent, threshold, sampler, patience=patience, seed=seed,
                                      bandit_edges=bandit_edges, bin_margin=bin_margin,
-                                     thread_budgets=thread_budgets, emergency_threshold=emergency_threshold)
+                                     thread_budgets=thread_budgets, emergency_cpu=emergency_cpu)
     # Drawn up front so a resumed run replays exactly the same condition orders
     orders = [rng.permutation(list(policies)) for _ in contexts]
 
@@ -218,7 +219,8 @@ def run_adaptive_evaluation(
                     _, stages, token_ids = generate_partitioned_response(
                         prompt, max_new_tokens=max_new_tokens, return_token_ids=True,
                         scheduler=policy, decision_interval=decision_interval, decision_log=log,
-                        step_callback=load.on_step, ignore_eos=True
+                        step_callback=load.on_step, ignore_eos=True,
+                        emergency_latency_factor=None if getattr(policy, "is_fixed", False) else emergency_latency_factor
                     )
                     latency = time.perf_counter() - t0
 
@@ -244,7 +246,7 @@ def run_adaptive_evaluation(
                     "policy_patience": 0 if cond == "rule_noh" else patience if cond in {
                         "rule_adaptive", "cores_heuristic", "rl_adaptive"
                     } else None,
-                    "emergency_threshold": emergency_threshold,
+                    "emergency_cpu": emergency_cpu,
                     "thread_budgets": ",".join(map(str, thread_budgets)),
                     **{f"share_{PartitionStrategy(s).strategy_name}": round((per_token["strategy_id"] == s).mean(), 3)
                        for s in PartitionStrategy.STRATEGIES},
@@ -391,8 +393,12 @@ if __name__ == "__main__":
                         help="Hysteresis decisions before switching (0 and 1 both switch immediately).")
     parser.add_argument("--thread-budgets", default="2,4,6,8,10,12",
                         help="Comma-separated core-budget candidates for cores_heuristic.")
-    parser.add_argument("--emergency-threshold", type=float, default=None,
-                        help="External CPU percent that bypasses policy patience at the next decision interval.")
+    parser.add_argument("--emergency-cpu", type=float, default=None,
+                        help="Scheduler CPU emergency: external CPU percent that bypasses policy patience "
+                             "at the next decision interval (off by default).")
+    parser.add_argument("--emergency-latency-factor", type=float, default=None,
+                        help="Engine latency switch for adaptive conditions: next token on balanced when a token "
+                             "takes more than this factor x the median of the last 10 (off by default).")
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--tag", default="v4")
     parser.add_argument("--resume", action="store_true", help="Continue an interrupted run with the same tag.")
@@ -432,5 +438,6 @@ if __name__ == "__main__":
         bandit_edges=tuple(float(e) for e in args.bandit_edges.split(",")),
         bin_margin=args.bin_margin,
         thread_budgets=tuple(int(value) for value in args.thread_budgets.split(",")),
-        emergency_threshold=args.emergency_threshold
+        emergency_cpu=args.emergency_cpu,
+        emergency_latency_factor=args.emergency_latency_factor
     )

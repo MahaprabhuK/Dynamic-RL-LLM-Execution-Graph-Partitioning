@@ -17,7 +17,7 @@ import math
 
 import numpy as np
 
-from src.llm.partition import PartitionStrategy, physical_core_count
+from src.llm.partition import PartitionStrategy, apply_partition_strategy, physical_core_count
 from src.rl.features import build_state
 from src.telemetry.monitor import ExternalLoadMonitor, collect_metrics
 
@@ -34,12 +34,12 @@ class AdaptivePolicy:
     requires_telemetry = True
 
     def __init__(self, once: bool = False, initial_interval: float = 0.3, sampler=None, patience: int = 1,
-                 emergency_threshold: float | None = None, emergency_action=None):
+                 emergency_cpu: float | None = None, emergency_action=None):
         self.once = once
         self.initial_interval = initial_interval
         self.sampler = sampler
         self.patience = max(0, int(patience))
-        self.emergency_threshold = emergency_threshold
+        self.emergency_cpu = emergency_cpu
         self.emergency_action = emergency_action
         self.monitor = ExternalLoadMonitor() if sampler is None else None
         self.current = None
@@ -85,7 +85,7 @@ class AdaptivePolicy:
 
         self.last_telemetry = {**telemetry, "telemetry_valid": True}
         proposal = self.choose(telemetry, prompt, input_tokens)
-        emergency = self.emergency_threshold is not None and cpu >= self.emergency_threshold
+        emergency = self.emergency_cpu is not None and cpu >= self.emergency_cpu
         if emergency and self.emergency_action is not None:
             proposal = self.emergency_action
             if isinstance(proposal, PartitionStrategy) and proposal.thread_budget is not None:
@@ -105,9 +105,11 @@ class AdaptivePolicy:
 
     @staticmethod
     def _action_key(action):
-        if isinstance(action, PartitionStrategy):
-            return action.strategy_id, tuple(action.get_thread_counts())
-        return action
+        if action is None:
+            return None
+        # ids, names ("threads_4", "balanced") and objects compare by what actually runs
+        action = action if isinstance(action, PartitionStrategy) else apply_partition_strategy(action)
+        return action.strategy_id, tuple(action.get_thread_counts())
 
     def on_emergency_switch(self, conservative_action=1):
         """Called when an emergency switch bypasses normal interval and hysteresis."""
@@ -128,6 +130,7 @@ class AdaptivePolicy:
 
 class FixedPolicy(AdaptivePolicy):
     requires_telemetry = False
+    is_fixed = True  # the engine refuses the latency emergency switch for fixed arms
 
     def __init__(self, strategy_id):
         super().__init__(once=True)
@@ -148,10 +151,10 @@ class ThresholdPolicy(AdaptivePolicy):
     """
 
     def __init__(self, threshold: float = 40.0, low_load_action: int = 0, high_load_action: int = 1, once=False,
-                 sampler=None, patience=1, emergency_threshold: float | None = None,
+                 sampler=None, patience=1, emergency_cpu: float | None = None,
                  emergency_action: int | None = None):
         super().__init__(once=once, sampler=sampler, patience=patience,
-                         emergency_threshold=emergency_threshold, emergency_action=emergency_action)
+                         emergency_cpu=emergency_cpu, emergency_action=emergency_action)
         self.threshold = threshold
         self.low_load_action = low_load_action
         self.high_load_action = high_load_action
@@ -169,11 +172,11 @@ class CoresHeuristicPolicy(AdaptivePolicy):
     """
 
     def __init__(self, sampler=None, logical_cores: int = 16, thread_budgets=PartitionStrategy.THREAD_BUDGETS, patience=1,
-                 emergency_threshold: float | None = None, emergency_action: int = 1):
+                 emergency_cpu: float | None = None, emergency_action: int = 1):
         budgets = tuple(sorted(set(int(value) for value in thread_budgets)))
         self.thread_budgets = budgets
         self.logical_cores = logical_cores
-        super().__init__(sampler=sampler, patience=patience, emergency_threshold=emergency_threshold,
+        super().__init__(sampler=sampler, patience=patience, emergency_cpu=emergency_cpu,
                          emergency_action=emergency_action)
 
     def choose(self, telemetry, prompt, input_tokens):
@@ -229,10 +232,10 @@ class CoresHeuristicPolicy(AdaptivePolicy):
 class RLPolicy(AdaptivePolicy):
     """Trained DQN agent, fed the same 4D state it was trained on."""
 
-    def __init__(self, agent, once=False, sampler=None, patience=1, emergency_threshold: float | None = None,
+    def __init__(self, agent, once=False, sampler=None, patience=1, emergency_cpu: float | None = None,
                  emergency_action: int | None = None):
         super().__init__(once=once, sampler=sampler, patience=patience,
-                         emergency_threshold=emergency_threshold, emergency_action=emergency_action)
+                         emergency_cpu=emergency_cpu, emergency_action=emergency_action)
         self.agent = agent
         self.agent.epsilon = 0.0
 
@@ -285,8 +288,8 @@ class OnlineBanditPolicy(AdaptivePolicy):
 
     def __init__(self, prior_agent=None, edges=(35.0,), discount=0.98, prior_weight=2.0, bonus=0.08,
                  sec_per_token_ref=0.5, sampler=None, seed=0, outlier_ratio=2.0, regime_after=5,
-                 bin_margin=8.0, emergency_threshold: float | None = None, emergency_action: int = 1):
-        super().__init__(once=False, sampler=sampler, emergency_threshold=emergency_threshold,
+                 bin_margin=8.0, emergency_cpu: float | None = None, emergency_action: int = 1):
+        super().__init__(once=False, sampler=sampler, emergency_cpu=emergency_cpu,
                          emergency_action=emergency_action)
         self.prior_agent = prior_agent
         if prior_agent is not None:
@@ -436,8 +439,8 @@ class OnlineBanditPolicy(AdaptivePolicy):
         telemetry = self.observe(step)
         b = self._bin = self.context_bin(telemetry)
         self._ensure_bin(b, prompt, input_tokens, telemetry)
-        emergency = (self.emergency_threshold is not None and
-                 telemetry["external_cpu_percent"] >= self.emergency_threshold)
+        emergency = (self.emergency_cpu is not None and
+                 telemetry["external_cpu_percent"] >= self.emergency_cpu)
         action = self.emergency_action if emergency else self.select(b)
 
         est = self.estimates(b)

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import time
 import psutil
@@ -77,6 +77,45 @@ class PagingTelemetryTracker:
             "swap_in_delta": sin_delta,
             "page_faults_delta": faults_delta,
             "has_paging_signal": sin_delta > 0,
+        }
+
+
+class SegmentPagingTracker:
+    """
+    Paging and RAM telemetry for one token segment (F3).
+
+    Each sample() returns the change since the previous sample of
+    psutil.swap_memory().sin / .sout (always 0 on Windows, where psutil does not
+    expose them), this process's page-fault count (num_page_faults on Windows;
+    includes soft faults) and the current available RAM in MB.
+    """
+
+    def __init__(self, process: psutil.Process | None = None):
+        self.process = process or psutil.Process()
+        self._last = self._read()
+
+    def _read(self):
+        sm = psutil.swap_memory()
+        mi = self.process.memory_info()
+        faults = getattr(mi, "num_page_faults", None)
+        if faults is None:  # non-Windows: major faults where available
+            try:
+                faults = self.process.memory_full_info().pfaults
+            except Exception:
+                faults = 0
+        return getattr(sm, "sin", 0) or 0, getattr(sm, "sout", 0) or 0, int(faults or 0)
+
+    def sample(self):
+        sin, sout, faults = self._read()
+        last_sin, last_sout, last_faults = self._last
+        self._last = (sin, sout, faults)
+        vm = psutil.virtual_memory()
+        return {
+            "swap_sin_delta": max(0, sin - last_sin),
+            "swap_sout_delta": max(0, sout - last_sout),
+            "page_faults_delta": max(0, faults - last_faults),
+            "available_mb": round(vm.available / 2 ** 20, 1),
+            "ram_percent": vm.percent,
         }
 
 

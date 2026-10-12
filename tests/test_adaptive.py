@@ -114,20 +114,20 @@ def test_rule_no_hysteresis_switches_with_zero_patience():
     assert policy.patience == 0
 
 
-def test_emergency_threshold_bypasses_patience_at_next_decision():
-    policy = ScriptedThreshold([10, 50, 90], threshold=40, patience=2, emergency_threshold=80)
+def test_emergency_cpu_bypasses_patience_at_next_decision():
+    policy = ScriptedThreshold([10, 50, 90], threshold=40, patience=2, emergency_cpu=80)
     assert [policy.decide(step=s, prompt="p", input_tokens=3) for s in (0, 10, 20)] == [0, 0, 1]
     assert policy.last_telemetry["emergency_switch"]
 
 
-def test_emergency_threshold_overrides_rl_proposal():
+def test_emergency_cpu_overrides_rl_proposal():
     class AgentDouble:
         epsilon = 0.0
 
         def choose_action(self, state):
             return 0
 
-    policy = RLPolicy(AgentDouble(), sampler=ScriptedSampler(90), emergency_threshold=80,
+    policy = RLPolicy(AgentDouble(), sampler=ScriptedSampler(90), emergency_cpu=80,
                       emergency_action=1)
     assert policy.decide(step=0, prompt="p", input_tokens=3) == 1
     assert policy.last_telemetry["emergency_switch"]
@@ -288,7 +288,8 @@ def test_online_bandit_uses_dqn_prior():
 # ---------------------------------------------------------------------------
 
 def fake_generate(prompt, strategy=0, max_new_tokens=100, do_sample=False, return_token_ids=False,
-                  scheduler=None, decision_interval=10, decision_log=None, step_callback=None, ignore_eos=False):
+                  scheduler=None, decision_interval=10, decision_log=None, step_callback=None, ignore_eos=False,
+                  emergency_latency_factor=None, segment_log=None, segment_tokens=10):
     stages = []
     current = strategy if isinstance(strategy, PartitionStrategy) else PartitionStrategy(strategy)
     for step in range(max_new_tokens):
@@ -587,64 +588,175 @@ def test_online_bandit_cost_attribution_drops_switch_tokens():
     assert np.isclose(last_rec["sec_per_token"], 0.1), f"Expected 0.1 s/tok after dropping 2 switch tokens, got {last_rec['sec_per_token']}"
 
 
-def test_emergency_switch_in_decode_loop_acts_immediately_and_disabled_restores_normal(monkeypatch):
-    from collections import deque
-    from src.llm.partition import PartitionStrategy, resolve
-    import numpy as np
+# ---------------------------------------------------------------------------
+# Real-engine tests (F2): generate_partitioned_response on a tiny random Llama
+# (2 layers, hidden 64, 4 heads, vocab 512; built from a config, no download).
+# ---------------------------------------------------------------------------
 
-    class MockScheduler:
-        def __init__(self):
-            self.current = 0
-            self.emergency_called = False
-            self.last_telemetry = {}
+TINY_LAYER_RANGES = {
+    "static": [[0, 1]],
+    "balanced": [[0, 0], [1, 1]],
+    "latency_optimized": [[0, 1]],
+}
+TINY_ARMS = ["threads_2", "threads_3", "balanced", "threads_4", "threads_6", "threads_10",
+             "static", "latency_optimized"]
 
-        def decide(self, step, prompt, input_tokens):
-            return self.current
 
-        def on_emergency_switch(self, conservative_action=1):
-            self.emergency_called = True
-            self.current = conservative_action
+class TinyTokenizer:
+    """Character-level stand-in for the HF tokenizer (only what the engine uses)."""
 
-    # Test emergency switch logic directly
-    recent_latencies = deque([0.1] * 10, maxlen=10)
-    scheduler = MockScheduler()
-    strat_obj = resolve(0)  # static
-    decision_log = []
+    eos_token_id = 2
 
-    # Case 1: Spike with emergency switch enabled -> immediate switch to conservative arm (1)
-    emergency_switch_enabled = True
-    emergency_factor = 3.0
-    conservative_strategy = 1
-    step_duration = 0.5  # 5x higher than median 0.1s
-    med_latency = float(np.median(recent_latencies))
+    def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=True):
+        return "<user>" + messages[0]["content"] + "<assistant>"
 
-    if emergency_switch_enabled and len(recent_latencies) >= 5 and emergency_factor > 0:
-        if step_duration > emergency_factor * med_latency and strat_obj.strategy_id != conservative_strategy:
-            strat_obj = resolve(conservative_strategy)
-            scheduler.on_emergency_switch(conservative_strategy)
-            decision_log.append({
-                "step": 15,
-                "strategy_id": strat_obj.strategy_id,
-                "emergency_trigger": True
-            })
+    def encode(self, text):
+        return [3 + (ord(ch) % 500) for ch in text]
 
-    assert strat_obj.strategy_id == 1, "Emergency switch did not trigger to conservative arm"
-    assert scheduler.emergency_called is True, "Scheduler on_emergency_switch callback was not invoked"
-    assert len(decision_log) == 1 and decision_log[0]["emergency_trigger"] is True
+    def __call__(self, text, return_tensors="pt"):
+        import torch
+        return {"input_ids": torch.tensor([self.encode(text)])}
 
-    # Case 2: Spike with emergency switch disabled -> stays on original strategy (0)
-    scheduler_disabled = MockScheduler()
-    strat_obj_disabled = resolve(0)
-    emergency_switch_enabled = False
-    decision_log_disabled = []
+    def decode(self, ids, skip_special_tokens=True):
+        return " ".join(map(str, ids))
 
-    if emergency_switch_enabled and len(recent_latencies) >= 5 and emergency_factor > 0:
-        if step_duration > emergency_factor * med_latency and strat_obj_disabled.strategy_id != conservative_strategy:
-            strat_obj_disabled = resolve(conservative_strategy)
 
-    assert strat_obj_disabled.strategy_id == 0, "Emergency switch triggered when explicitly disabled"
-    assert scheduler_disabled.emergency_called is False
-    assert len(decision_log_disabled) == 0
+@pytest.fixture(scope="module")
+def tiny_model():
+    import torch
+    from transformers import LlamaConfig, LlamaForCausalLM
+
+    torch.manual_seed(0)
+    config = LlamaConfig(vocab_size=512, hidden_size=64, intermediate_size=128, num_hidden_layers=2,
+                         num_attention_heads=4, num_key_value_heads=4, max_position_embeddings=256,
+                         bos_token_id=1, eos_token_id=2, pad_token_id=0)
+    model = LlamaForCausalLM(config).eval()
+    return TinyTokenizer(), model
+
+
+@pytest.fixture
+def tiny_engine(tiny_model, monkeypatch):
+    import copy
+    import src.config as config_module
+    import src.llm.inference as inference
+    import src.llm.partition as partition
+
+    tiny_config = copy.deepcopy(config_module.load_config())
+    for name, ranges in TINY_LAYER_RANGES.items():
+        tiny_config["strategies"][name]["layer_ranges"] = ranges
+    monkeypatch.setattr(partition, "load_config", lambda: tiny_config)
+    monkeypatch.setattr(inference, "get_model", lambda: tiny_model)
+    return inference.generate_partitioned_response
+
+
+class SlowLayer:
+    """Wraps layer 0: every call sleeps `base` s, call number `slow_call` sleeps `slow` s."""
+
+    def __init__(self, layer, base=0.005, slow=0.2, slow_call=None):
+        self.layer, self.base, self.slow, self.slow_call, self.calls = layer, base, slow, slow_call, 0
+
+    def __call__(self, *args, **kwargs):
+        self.calls += 1
+        time.sleep(self.slow if self.calls == self.slow_call else self.base)
+        return self.layer(*args, **kwargs)
+
+
+@pytest.fixture
+def slow_token(tiny_model, monkeypatch):
+    """Make token step 8 slow (layer 0 runs once per token for every arm)."""
+    _, model = tiny_model
+    wrapper = SlowLayer(model.model.layers[0], slow_call=9)
+    monkeypatch.setitem(model.model.layers._modules, "0", wrapper)
+    return wrapper
+
+
+def _arms_per_token(stages):
+    frame = pd.DataFrame(stages)
+    return frame.groupby("token_step")["arm"].first().tolist(), frame
+
+
+class ScriptedArm:
+    """Adaptive scheduler double that always proposes the same arm."""
+
+    def __init__(self, arm):
+        self.arm, self.last_telemetry, self.emergency_calls = arm, {}, []
+
+    def decide(self, step, prompt, input_tokens):
+        return self.arm
+
+    def on_emergency_switch(self, conservative_action=1):
+        self.emergency_calls.append(conservative_action)
+
+
+@pytest.mark.parametrize("use_fixed_policy", [False, True])
+def test_engine_fixed_strategy_never_switches_on_slow_token(tiny_engine, slow_token, use_fixed_policy):
+    kwargs = {"scheduler": FixedPolicy("threads_10")} if use_fixed_policy else {"strategy": "threads_10"}
+    log = []
+    _, stages, ids = tiny_engine("hello world", max_new_tokens=20, return_token_ids=True, ignore_eos=True,
+                                 decision_log=log, **kwargs)
+    arms, frame = _arms_per_token(stages)
+    assert slow_token.calls >= 9, "slow token was not injected"
+    assert arms == ["threads_10"] * 20
+    assert not frame["emergency_trigger"].any()
+    assert not any(d.get("emergency_trigger") for d in log)
+
+
+@pytest.mark.parametrize("use_fixed_policy", [False, True])
+def test_engine_rejects_latency_switch_for_fixed_strategies(tiny_engine, use_fixed_policy):
+    kwargs = {"scheduler": FixedPolicy("threads_10")} if use_fixed_policy else {"strategy": "threads_10"}
+    with pytest.raises(ValueError):
+        tiny_engine("hello", max_new_tokens=3, emergency_latency_factor=3.0, **kwargs)
+
+
+def test_engine_latency_switch_is_off_by_default(tiny_engine, slow_token):
+    scheduler = ScriptedArm("threads_10")
+    _, stages = tiny_engine("hello world", max_new_tokens=20, ignore_eos=True, scheduler=scheduler,
+                            decision_interval=100)
+    arms, frame = _arms_per_token(stages)
+    assert arms == ["threads_10"] * 20
+    assert not frame["emergency_trigger"].any() and scheduler.emergency_calls == []
+
+
+def test_engine_latency_switch_acts_on_token_after_slow_token(tiny_engine, slow_token):
+    scheduler = ScriptedArm("threads_10")
+    log = []
+    _, stages = tiny_engine("hello world", max_new_tokens=20, ignore_eos=True, scheduler=scheduler,
+                            decision_interval=100, decision_log=log, emergency_latency_factor=3.0,
+                            conservative_strategy="balanced")
+    arms, frame = _arms_per_token(stages)
+    # token 8 is slow; token 9 is the first one on the conservative arm
+    assert arms[:9] == ["threads_10"] * 9
+    assert arms[9:] == ["balanced"] * 11
+    per_token = frame.groupby("token_step").first()
+    assert per_token.loc[9, "emergency_trigger"] and per_token.loc[9, "emergency_kind"] == "latency"
+    assert not per_token.drop(index=9)["emergency_trigger"].any()
+    emergencies = [d for d in log if d.get("emergency_trigger")]
+    assert len(emergencies) == 1 and emergencies[0]["step"] == 9 and emergencies[0]["emergency_kind"] == "latency"
+    assert scheduler.emergency_calls == ["balanced"]
+
+
+@pytest.mark.parametrize("arm", TINY_ARMS)
+def test_engine_tokens_match_generate_on_tiny_model(tiny_engine, tiny_model, arm):
+    import torch
+
+    tokenizer, model = tiny_model
+    prompt = "the quick brown fox"
+    inputs = tokenizer(tokenizer.apply_chat_template([{"role": "user", "content": prompt}]))
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=15, min_new_tokens=15, do_sample=False,
+                             pad_token_id=0, eos_token_id=None)
+    expected = out[0][inputs["input_ids"].shape[1]:].tolist()
+    _, _, ids = tiny_engine(prompt, strategy=arm, max_new_tokens=15, return_token_ids=True, ignore_eos=True)
+    assert ids == expected
+
+
+def test_engine_segment_log_records_paging_per_10_tokens(tiny_engine):
+    segments = []
+    tiny_engine("hello", strategy="threads_2", max_new_tokens=25, ignore_eos=True, segment_log=segments)
+    assert [(s["start_step"], s["end_step"]) for s in segments] == [(0, 9), (10, 19), (20, 24)]
+    for s in segments:
+        for key in ["swap_sin_delta", "swap_sout_delta", "page_faults_delta", "available_mb"]:
+            assert s[key] is not None and s[key] >= 0
 
 
 def test_online_bandit_stall_rule_retest_at_12_workers():
@@ -726,3 +838,43 @@ def test_resume_integrity_filters_incomplete_contexts(tmp_path):
     valid_runs = [r for r in loaded_runs if r["context_id"] in done]
     assert len(valid_runs) == 7
     assert {r["context_id"] for r in valid_runs} == {1}
+
+
+def test_ram_guard_waits_then_runs(tmp_path):
+    from src.telemetry.run_guard import ram_guard
+
+    readings = iter([90.0, 88.0, 70.0])
+    waits = []
+    ok, snap = ram_guard(tmp_path / "skipped.csv", {"run": 1}, sleep=waits.append,
+                         snapshot=lambda: {"ram_percent": next(readings), "available_mb": 1000.0})
+    assert ok and snap["ram_percent"] == 70.0 and waits == [30.0, 30.0]
+    assert not (tmp_path / "skipped.csv").exists()
+
+
+def test_ram_guard_skips_and_logs_after_ten_retries(tmp_path):
+    from src.telemetry.run_guard import ram_guard
+
+    waits = []
+    path = tmp_path / "skipped.csv"
+    for run in (1, 2):
+        ok, _ = ram_guard(path, {"run": run, "condition": "balanced"}, sleep=waits.append,
+                          snapshot=lambda: {"ram_percent": 95.0, "available_mb": 500.0})
+        assert not ok
+    assert len(waits) == 20
+    skipped = pd.read_csv(path)
+    assert skipped["run"].tolist() == [1, 2] and (skipped["retries"] == 10).all()
+    assert skipped["reason"].str.contains("RAM").all() and skipped["commit_hash"].notna().all()
+
+
+def test_v7_thread_arms_are_single_stage_with_fixed_threads():
+    from src.llm.partition import apply_partition_strategy
+
+    for budget in PartitionStrategy.V7_THREAD_ARMS:
+        arm = apply_partition_strategy(f"threads_{budget}")
+        assert arm.arm_name == f"threads_{budget}"
+        assert arm.get_layer_ranges() == [(0, 21)] and arm.get_thread_counts() == [budget]
+    balanced = apply_partition_strategy("balanced")
+    assert balanced.arm_name == "balanced" and balanced.get_thread_counts() == [3, 3]
+    assert set(PartitionStrategy.V7_ARMS) == {f"threads_{b}" for b in PartitionStrategy.V7_THREAD_ARMS} | {"balanced"}
+    with pytest.raises(ValueError):
+        apply_partition_strategy("threads_5")
