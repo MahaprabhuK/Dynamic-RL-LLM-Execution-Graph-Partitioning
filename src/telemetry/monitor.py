@@ -1,24 +1,83 @@
+﻿import os
+import sys
 import time
 import psutil
 from datetime import datetime
-import torch
+from typing import Any, TYPE_CHECKING
+
+_torch_lib = r"C:\Users\Pavithran\AppData\Local\Programs\Python\Python312\Lib\site-packages\torch\lib"
+if os.path.exists(_torch_lib):
+    try:
+        os.add_dll_directory(_torch_lib)
+    except Exception:
+        pass
+    os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
+
+try:
+    import torch
+except (ImportError, OSError) as e:
+    if isinstance(e, OSError) and getattr(e, "winerror", None) != 1114 and "c10" not in str(e) and "DLL" not in str(e):
+        raise
+    torch = None
 
 
 def collect_metrics(interval: float = 0.1):
     """
     Snapshot of system load. `cpu_percent` is averaged over `interval` seconds.
+    Includes swap and page fault metrics for independent paging telemetry.
     """
     cpu = psutil.cpu_percent(interval=interval)
-
     memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    proc = psutil.Process()
+    mem_info = proc.memory_info()
 
     return {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "cpu_percent": cpu,
         "ram_percent": memory.percent,
         "ram_used_gb": round(memory.used / (1024 ** 3), 2),
-        "ram_available_gb": round(memory.available / (1024 ** 3), 2)
+        "ram_available_gb": round(memory.available / (1024 ** 3), 2),
+        "swap_sin": getattr(swap, "sin", 0) or 0,
+        "num_page_faults": getattr(mem_info, "num_page_faults", 0) or 0,
     }
+
+
+class PagingTelemetryTracker:
+    """
+    Independent paging telemetry tracker.
+    Logs:
+    - psutil.swap_memory().sin delta (pages/bytes swapped into RAM from disk)
+    - process page faults delta: psutil.Process().memory_info().num_page_faults (on Windows)
+      or major page faults where the OS exposes them.
+    """
+
+    def __init__(self, process: psutil.Process | None = None):
+        self.process = process or psutil.Process()
+        self.reset()
+
+    def reset(self):
+        sm = psutil.swap_memory()
+        self._last_sin = getattr(sm, "sin", 0) or 0
+        mi = self.process.memory_info()
+        self._last_faults = getattr(mi, "num_page_faults", 0) or 0
+
+    def sample_delta(self) -> dict[str, Any]:
+        sm = psutil.swap_memory()
+        curr_sin = getattr(sm, "sin", 0) or 0
+        mi = self.process.memory_info()
+        curr_faults = getattr(mi, "num_page_faults", 0) or 0
+
+        sin_delta = max(0, curr_sin - self._last_sin)
+        faults_delta = max(0, curr_faults - self._last_faults)
+        self._last_sin = curr_sin
+        self._last_faults = curr_faults
+
+        return {
+            "swap_in_delta": sin_delta,
+            "page_faults_delta": faults_delta,
+            "has_paging_signal": sin_delta > 0,
+        }
 
 
 class ExternalLoadMonitor:
@@ -36,11 +95,13 @@ class ExternalLoadMonitor:
     def __init__(self):
         self.process = psutil.Process()
         self.num_cpus = psutil.cpu_count() or 1
+        self.paging_tracker = PagingTelemetryTracker(self.process)
         self.reset()
 
     def reset(self):
         psutil.cpu_percent(interval=None)
         self.process.cpu_percent(interval=None)
+        self.paging_tracker.reset()
         self._last_time = time.perf_counter()
 
     def sample(self):
@@ -49,13 +110,17 @@ class ExternalLoadMonitor:
         now = time.perf_counter()
         window = now - self._last_time
         self._last_time = now
+        paging = self.paging_tracker.sample_delta()
 
         return {
             "cpu_percent": system_cpu,
             "own_cpu_percent": round(own_cpu, 2),
             "external_cpu_percent": round(max(0.0, system_cpu - own_cpu), 2),
             "ram_percent": psutil.virtual_memory().percent,
-            "window_seconds": round(window, 3)
+            "window_seconds": round(window, 3),
+            "swap_in_delta": paging["swap_in_delta"],
+            "page_faults_delta": paging["page_faults_delta"],
+            "has_paging_signal": paging["has_paging_signal"],
         }
 
 
@@ -76,6 +141,7 @@ class BackgroundLoadSampler:
         self.smoothing = smoothing
         self.process = psutil.Process()
         self.num_cpus = psutil.cpu_count() or 1
+        self.paging_tracker = PagingTelemetryTracker(self.process)
         self._latest = None
         self._lock = None
         self._stop = None
@@ -100,6 +166,7 @@ class BackgroundLoadSampler:
             own_cpu = 100.0 * (own - last_own) / max((now - last_time) * self.num_cpus, 1e-9)
             external = min(100.0, max(0.0, system_cpu - own_cpu))
             last_sys, last_own, last_time = (busy, total), own, now
+            paging = self.paging_tracker.sample_delta()
 
             with self._lock:
                 prev = self._latest
@@ -110,7 +177,10 @@ class BackgroundLoadSampler:
                     "own_cpu_percent": round(ema("own_cpu_percent", own_cpu), 2),
                     "external_cpu_percent": round(ema("external_cpu_percent", external), 2),
                     "ram_percent": psutil.virtual_memory().percent,
-                    "window_seconds": self.interval
+                    "window_seconds": self.interval,
+                    "swap_in_delta": paging["swap_in_delta"],
+                    "page_faults_delta": paging["page_faults_delta"],
+                    "has_paging_signal": paging["has_paging_signal"],
                 }
 
     def start(self):
@@ -133,7 +203,8 @@ class BackgroundLoadSampler:
         with self._lock:
             if self._latest is None:
                 return {"cpu_percent": 0.0, "own_cpu_percent": 0.0, "external_cpu_percent": 0.0,
-                        "ram_percent": psutil.virtual_memory().percent, "window_seconds": 0.0}
+                        "ram_percent": psutil.virtual_memory().percent, "window_seconds": 0.0,
+                        "swap_in_delta": 0, "page_faults_delta": 0, "has_paging_signal": False}
             return dict(self._latest)
 
     def __enter__(self):
@@ -145,7 +216,7 @@ class BackgroundLoadSampler:
 
 
 def measure_activation_handoff(
-    tensor: torch.Tensor,
+    tensor: Any | None,
     stage_id: int,
     layer_start: int | None,
     layer_end: int | None,
@@ -177,6 +248,9 @@ def measure_activation_handoff(
             "handoff_latency_seconds": 0.0
         }
 
+    if torch is None:
+        raise RuntimeError("PyTorch is required to measure activation handoffs.")
+
     # Measure exact physical tensor memory copy
     t0 = time.perf_counter()
     _copied_tensor = tensor.clone()
@@ -202,6 +276,8 @@ def measure_activation_handoff(
 
 
 if __name__ == "__main__":
+    import torch
+
     metrics = collect_metrics()
     print(metrics)
 

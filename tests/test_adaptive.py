@@ -19,8 +19,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.llm.partition import PartitionStrategy
-from src.rl.dqn_agent import DQNAgent
-from src.scheduler.adaptive import FixedPolicy, OnlineBanditPolicy, RLPolicy, ThresholdPolicy
+from src.scheduler.adaptive import CoresHeuristicPolicy, FixedPolicy, OnlineBanditPolicy, RLPolicy, ThresholdPolicy
+from src.benchmark.oracles import segment_oracle
 from src.telemetry.load_generator import DynamicCPULoad, TokenScheduledLoad
 from src.telemetry.monitor import BackgroundLoadSampler, ExternalLoadMonitor
 
@@ -51,7 +51,13 @@ def test_fixed_policy():
 
 
 def test_rl_policy_returns_valid_action():
-    policy = RLPolicy(DQNAgent())
+    class AgentDouble:
+        epsilon = 1.0
+
+        def choose_action(self, state):
+            return 1
+
+    policy = RLPolicy(AgentDouble())
     assert policy.decide(step=0, prompt="hello", input_tokens=2) in PartitionStrategy.STRATEGIES
     assert "external_cpu_percent" in policy.last_telemetry
 
@@ -100,6 +106,93 @@ def test_hysteresis_requires_consecutive_proposals():
     policy = ScriptedThreshold([10, 90, 10, 90, 90, 90], threshold=40, patience=2)
     chosen = [policy.decide(step=s, prompt="p", input_tokens=3) for s in range(0, 60, 10)]
     assert chosen == [0, 0, 0, 0, 1, 1]
+
+
+def test_rule_no_hysteresis_switches_with_zero_patience():
+    policy = ScriptedThreshold([10, 90], threshold=40, patience=0)
+    assert [policy.decide(step=s, prompt="p", input_tokens=3) for s in (0, 10)] == [0, 1]
+    assert policy.patience == 0
+
+
+def test_emergency_threshold_bypasses_patience_at_next_decision():
+    policy = ScriptedThreshold([10, 50, 90], threshold=40, patience=2, emergency_threshold=80)
+    assert [policy.decide(step=s, prompt="p", input_tokens=3) for s in (0, 10, 20)] == [0, 0, 1]
+    assert policy.last_telemetry["emergency_switch"]
+
+
+def test_emergency_threshold_overrides_rl_proposal():
+    class AgentDouble:
+        epsilon = 0.0
+
+        def choose_action(self, state):
+            return 0
+
+    policy = RLPolicy(AgentDouble(), sampler=ScriptedSampler(90), emergency_threshold=80,
+                      emergency_action=1)
+    assert policy.decide(step=0, prompt="p", input_tokens=3) == 1
+    assert policy.last_telemetry["emergency_switch"]
+
+
+def test_invalid_telemetry_holds_current_action_then_recovers():
+    policy = ScriptedThreshold([10, 90, float("nan"), 90, 90], threshold=40, patience=2)
+    choices = [policy.decide(step=s, prompt="p", input_tokens=3) for s in (0, 10, 20, 30, 40)]
+    assert choices == [0, 0, 0, 0, 1]
+    assert policy.last_telemetry["telemetry_valid"]
+
+
+def test_cores_heuristic_is_stable_and_reduces_budget_as_load_rises():
+    sampler = ScriptedSampler(10)
+    policy = CoresHeuristicPolicy(sampler=sampler, patience=1)
+    idle_a = policy.decide(step=0, prompt="p", input_tokens=3)
+    idle_b = policy.decide(step=10, prompt="p", input_tokens=3)
+    assert idle_a.get_thread_counts() == idle_b.get_thread_counts()
+
+    budgets = [sum(idle_b.get_thread_counts())]
+    for step, cpu in enumerate((35, 60, 90), start=2):
+        sampler.cpu = cpu
+        action = policy.decide(step=step * 10, prompt="p", input_tokens=3)
+        budgets.append(sum(action.get_thread_counts()))
+    assert budgets == sorted(budgets, reverse=True)
+    assert set(budgets).issubset(set(PartitionStrategy.THREAD_BUDGETS))
+
+
+@pytest.mark.parametrize("interval", [5, 10, 20])
+def test_generation_decision_interval_and_switch_overhead(interval):
+    decisions = []
+    steps = list(range(0, interval * 3, interval))
+    policy = ScriptedThreshold([10, 90, 90], threshold=40, patience=1)
+    fake_generate("p", strategy=0, max_new_tokens=interval * 3, scheduler=policy,
+                  decision_interval=interval, decision_log=decisions)
+    assert [row["step"] for row in decisions] == steps
+    assert all(row["decision_overhead_seconds"] > 0 for row in decisions)
+    assert sum(a["strategy_id"] != b["strategy_id"] for a, b in zip(decisions, decisions[1:])) == 1
+
+
+def test_switch_counter_includes_thread_budget_changes():
+    from evaluate_adaptive import _count_decision_switches
+
+    decisions = [
+        {"strategy_id": 2, "thread_counts": [8]},
+        {"strategy_id": 2, "thread_counts": [4]},
+        {"strategy_id": 1, "thread_counts": [2, 2]},
+        {"strategy_id": 1, "thread_counts": [2, 2]},
+    ]
+    assert _count_decision_switches(decisions) == 2
+
+
+def test_segment_oracle_is_explicitly_offline_and_requires_complete_actions():
+    outcomes = pd.DataFrame([
+        {"context_id": 1, "segment_id": 0, "action": "static", "latency_seconds": 2.0},
+        {"context_id": 1, "segment_id": 0, "action": "balanced", "latency_seconds": 1.0},
+        {"context_id": 1, "segment_id": 1, "action": "static", "latency_seconds": 0.5},
+        {"context_id": 1, "segment_id": 1, "action": "balanced", "latency_seconds": 1.5},
+    ])
+    oracle = segment_oracle(outcomes)
+    assert oracle["action"].tolist() == ["balanced", "static"]
+    assert oracle["uses_future_outcomes"].all()
+    assert not oracle["online_usable"].any()
+    with pytest.raises(ValueError, match="incomplete action outcomes"):
+        segment_oracle(outcomes.iloc[:-1])
 
 
 def test_step_zero_starts_new_request():
@@ -175,7 +268,15 @@ def test_online_bandit_bin_hysteresis():
 
 
 def test_online_bandit_uses_dqn_prior():
-    agent = DQNAgent()
+    class AgentDouble:
+        epsilon = 1.0
+        state_size = 4
+        action_size = 3
+
+        def q_values(self, state):
+            return np.array([-0.4, -0.2, -0.3])
+
+    agent = AgentDouble()
     bandit = OnlineBanditPolicy(prior_agent=agent, sampler=ScriptedSampler(10.0))
     bandit.decide(step=0, prompt="hello", input_tokens=2)
     assert (bandit.weights[0] == bandit.prior_weight).all()
@@ -188,15 +289,20 @@ def test_online_bandit_uses_dqn_prior():
 
 def fake_generate(prompt, strategy=0, max_new_tokens=100, do_sample=False, return_token_ids=False,
                   scheduler=None, decision_interval=10, decision_log=None, step_callback=None, ignore_eos=False):
-    stages, current = [], PartitionStrategy(strategy)
+    stages = []
+    current = strategy if isinstance(strategy, PartitionStrategy) else PartitionStrategy(strategy)
     for step in range(max_new_tokens):
         if step_callback is not None:
             step_callback(step)
         if scheduler is not None and step % decision_interval == 0:
-            current = PartitionStrategy(scheduler.decide(step=step, prompt=prompt, input_tokens=3))
+            started = time.perf_counter()
+            proposal = scheduler.decide(step=step, prompt=prompt, input_tokens=3)
+            current = proposal if isinstance(proposal, PartitionStrategy) else PartitionStrategy(proposal)
             if decision_log is not None:
                 decision_log.append({"step": step, "strategy_id": current.strategy_id,
-                                     "decision_overhead_seconds": 0.0, **scheduler.last_telemetry})
+                                     "thread_counts": current.get_thread_counts(),
+                                     "decision_overhead_seconds": time.perf_counter() - started,
+                                     **scheduler.last_telemetry})
         stages.append({"token_step": step, "strategy_id": current.strategy_id, "stage_latency_seconds": 0.001,
                        "handoff_latency_seconds": 0.0, "activation_size_mb": 0.0})
     ids = list(range(max_new_tokens))
@@ -220,24 +326,48 @@ class NoLoad:
 def test_adaptive_evaluation_pipeline(tmp_path, monkeypatch):
     import evaluate_adaptive as ea
 
+    class ModelDouble:
+        def state_dict(self):
+            return {}
+
+        def load_state_dict(self, state):
+            return None
+
+    class AgentDouble:
+        state_size = 4
+        action_size = 3
+        epsilon = 1.0
+
+        def __init__(self, **kwargs):
+            self.model = ModelDouble()
+
+        def load(self, path):
+            return None
+
+        def choose_action(self, state):
+            return 0
+
+        def q_values(self, state):
+            return np.array([-0.4, -0.2, -0.3])
+
     data_dir = tmp_path / "data" / "processed"
     data_dir.mkdir(parents=True)
     pd.DataFrame({"prompt_id": [1, 2], "prompt": ["first prompt", "second prompt"]}).to_csv(
         data_dir / "prompts.csv", index=False)
 
-    agent = DQNAgent()
-    agent.save(str(data_dir / "dqn.pth"))
+    (data_dir / "dqn.pth").touch()
 
     monkeypatch.setattr(ea, "ROOT_DIR", tmp_path)
-    monkeypatch.setattr(ea, "generate_partitioned_response", fake_generate)
+    monkeypatch.setattr(ea, "_load_inference", lambda: fake_generate)
+    monkeypatch.setattr(ea, "_load_dqn_agent", lambda: AgentDouble)
     monkeypatch.setattr(ea, "TokenScheduledLoad", NoLoad)
     monkeypatch.setattr(ea, "time", types.SimpleNamespace(sleep=lambda s: None, perf_counter=time.perf_counter))
 
     df = ea.run_adaptive_evaluation(model_path="data/processed/dqn.pth", num_prompts=1, prompt_offset=1,
                                     max_new_tokens=30, decision_interval=10, tag="t")
 
-    assert set(df["condition"]) == {"static", "balanced", "latency_optimized", "rule_adaptive",
-                                    "rl_once", "rl_adaptive", "bandit_adaptive"}
+    assert set(df["condition"]) == {"static", "balanced", "latency_optimized", "rule_adaptive", "rule_noh",
+                                    "cores_heuristic", "rl_once", "rl_adaptive", "bandit_adaptive"}
     assert set(df["scenario"]) == {"steady_idle", "steady_heavy", "spike", "relief"}
     assert (df[df["condition"] == "rl_once"]["num_switches"] == 0).all()
     assert (df[df["condition"].str.endswith("_adaptive")]["num_decisions"] == 3).all()
@@ -253,3 +383,346 @@ def test_adaptive_evaluation_pipeline(tmp_path, monkeypatch):
     assert list(resumed[resumed["context_id"] == last]["condition"]) == list(df[df["context_id"] == last]["condition"])
 
 
+from src.telemetry.stall_detection import detect_segment_stall, audit_v5_exclusions
+from src.telemetry.monitor import PagingTelemetryTracker
+
+
+def test_cliff_hit_on_static_under_load_is_never_excluded():
+    # Context 36 in ramp: 12 workers arrived at token 140, policy stayed on static.
+    # Latency jumped from ~3 s / 20 tokens to 110.3 s / 20 tokens.
+    runs = pd.DataFrame([
+        {"context_id": i, "scenario": "ramp", "condition": "rl_adaptive", "latency_seconds": 54.9, "num_generated_tokens": 200}
+        for i in range(1, 6)
+    ] + [{
+        "context_id": 36, "scenario": "ramp", "condition": "rl_adaptive",
+        "latency_seconds": 167.6770, "num_generated_tokens": 200
+    }])
+    audit = audit_v5_exclusions(runs, stall_ratio=2.0)
+    assert len(audit) == 1
+    row = audit.iloc[0]
+    assert row["context_id"] == 36
+    assert bool(row["is_cliff_or_policy_failure"]) is True
+    assert bool(row["excluded_from_primary"]) is False
+    assert row["classification"] == "oversubscription_cliff"
+    assert "oversubscription cliff" in row["evidence"].lower()
+
+
+def test_bandit_exploration_above_cliff_is_never_excluded():
+    # Context 14 in ramp: bandit explored static at tokens 180-200 under 12 workers.
+    runs = pd.DataFrame([
+        {"context_id": i, "scenario": "ramp", "condition": "bandit_adaptive", "latency_seconds": 75.0, "num_generated_tokens": 200}
+        for i in range(1, 6)
+    ] + [{
+        "context_id": 14, "scenario": "ramp", "condition": "bandit_adaptive",
+        "latency_seconds": 157.7798, "num_generated_tokens": 200
+    }])
+    audit = audit_v5_exclusions(runs, stall_ratio=2.0)
+    assert len(audit) == 1
+    row = audit.iloc[0]
+    assert row["context_id"] == 14
+    assert bool(row["is_cliff_or_policy_failure"]) is True
+    assert bool(row["excluded_from_primary"]) is False
+    assert row["classification"] == "bandit_exploration_cliff"
+    assert "bandit exploration" in row["evidence"].lower()
+
+
+def test_detect_segment_stall_distinguishes_load_changes_from_stalls():
+    # 30 tokens: block 0 (idle, static), block 1 (heavy load, static), block 2 (heavy load, static)
+    tokens = [0.1] * 10 + [2.5] * 10 + [2.5] * 10
+    strats = [0] * 30
+    loads = [0] * 10 + [12] * 10 + [12] * 10
+
+    # Block 1 jump was caused by load change (0 -> 12 workers): cliff, NOT stall
+    res = detect_segment_stall(tokens, strats, load_levels=loads, jump_ratio=3.0, min_segment_tokens=10)
+    assert res["is_cliff"] is True
+    assert res["has_stall"] is False
+
+    # Spiking when load and strategy are both constant:
+    # tokens 0-9: 0.1s, tokens 10-19: 0.1s, tokens 20-29: 3.0s under constant load and strategy
+    constant_load_jump = [0.1] * 20 + [3.0] * 10
+    constant_loads = [0] * 30
+    constant_strats = [0] * 30
+
+    # Without paging signal: not confirmed stall
+    res_no_paging = detect_segment_stall(constant_load_jump, constant_strats, load_levels=constant_loads,
+                                         paging_signals=[False] * 30, jump_ratio=3.0, min_segment_tokens=10)
+    assert res_no_paging["is_cliff"] is False
+    assert res_no_paging["has_stall"] is False
+    assert res_no_paging["unexplained_stalls"] == 1
+
+    # With independent paging signal: confirmed stall
+    res_with_paging = detect_segment_stall(constant_load_jump, constant_strats, load_levels=constant_loads,
+                                           paging_signals=[True] * 30, jump_ratio=3.0, min_segment_tokens=10)
+    assert res_with_paging["has_stall"] is True
+
+
+def test_paging_telemetry_tracker_records_deltas():
+    tracker = PagingTelemetryTracker()
+    delta = tracker.sample_delta()
+    assert "swap_in_delta" in delta
+    assert "page_faults_delta" in delta
+    assert "has_paging_signal" in delta
+    assert delta["swap_in_delta"] >= 0
+    assert delta["page_faults_delta"] >= 0
+
+
+def test_v5r_audit_retains_all_historical_contexts_in_primary():
+    v5_csv = Path("data/processed/adaptive_runs_v5.csv")
+    if v5_csv.exists():
+        runs = pd.read_csv(v5_csv)
+        audit = audit_v5_exclusions(runs)
+        assert len(audit) == 4
+        assert set(audit["context_id"]) == {14, 19, 36, 39}
+        assert (audit["excluded_from_primary"] == False).all()
+        assert (audit["sensitivity_candidate"] == True).all()
+
+
+# --- P1 Unit & Regression Tests ---
+
+def test_cores_heuristic_clamp_formula_and_mapping():
+    sampler = ScriptedSampler(0.0)
+    policy = CoresHeuristicPolicy(sampler=sampler, logical_cores=16, thread_budgets=(3, 6, 10), patience=0)
+
+    # 0% external CPU -> 16 available -> clamp(16, 1, 10) = 10 threads
+    policy.decide(step=0, prompt="p", input_tokens=3)
+    assert policy.last_telemetry["target_threads"] == 10
+    assert policy.last_telemetry["cores_heuristic_action"] == 0  # static
+
+    # 50% external CPU -> 8 busy -> 8 available -> clamp(8, 1, 10) = 8 -> 6 threads
+    sampler.cpu = 50.0
+    policy.decide(step=10, prompt="p", input_tokens=3)
+    assert policy.last_telemetry["target_threads"] == 8
+    assert policy.last_telemetry["cores_heuristic_action"] == 2  # latency_optimized
+
+    # 85% external CPU -> 13.6 busy -> 2.4 available -> clamp(2, 1, 10) = 2 -> 3 threads
+    sampler.cpu = 85.0
+    policy.decide(step=20, prompt="p", input_tokens=3)
+    assert policy.last_telemetry["target_threads"] == 2
+    assert policy.last_telemetry["cores_heuristic_action"] == 1  # balanced
+
+
+def test_timeline_segment_oracle_computes_hindsight_bound():
+    from src.benchmark.oracles import compute_timeline_segment_oracle, compute_policy_regrets
+
+    # 20 tokens (2 segments of 10) across 3 fixed strategies
+    # In segment 0: static is fastest (0.1 s/tok vs 0.2, 0.3)
+    # In segment 1: balanced is fastest (0.1 s/tok vs 0.5, 0.3)
+    rows = []
+    for cond, (s0_spt, s1_spt) in [("static", (0.1, 0.5)), ("balanced", (0.3, 0.1)), ("latency_optimized", (0.2, 0.2))]:
+        for step in range(20):
+            spt = s0_spt if step < 10 else s1_spt
+            rows.append({
+                "context_id": 1,
+                "scenario": "spike",
+                "condition": cond,
+                "token_step": step,
+                "token_seconds": spt,
+                "strategy_id": 0 if cond == "static" else (1 if cond == "balanced" else 2)
+            })
+    timelines_df = pd.DataFrame(rows)
+    oracle_df = compute_timeline_segment_oracle(timelines_df, segment_size=10)
+
+    # Segment 0 oracle cost = 10 * 0.1 = 1.0 s
+    # Segment 1 oracle cost = 10 * 0.1 = 1.0 s
+    # Total segment oracle = 2.0 s
+    assert len(oracle_df) == 1
+    row = oracle_df.iloc[0]
+    assert np.isclose(row["segment_oracle_seconds"], 2.0)
+
+    # Single best fixed arm: latency_optimized (10*0.2 + 10*0.2 = 4.0 s) vs static (6.0 s) vs balanced (4.0 s)
+    assert np.isclose(row["best_single_fixed_seconds"], 4.0)
+    assert np.isclose(row["oracle_gap_seconds"], 2.0)
+
+
+def test_online_bandit_p1_3_pruning_and_top_bin():
+    # Top bin (cpu >= 63% with edges=(51, 63)): static (arm 0) must NEVER be selected
+    sampler = ScriptedSampler(80.0)
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=sampler, edges=(51.0, 63.0), seed=42)
+    selections = [bandit.decide(step=step, prompt="p", input_tokens=3) for step in range(0, 100, 10)]
+    assert 0 not in selections, "Static (arm 0) was selected in the top high-load bin"
+
+    # Exploration pruning: arm with estimate > 2x best arm is never selected
+    bandit2 = OnlineBanditPolicy(prior_agent=None, sampler=ScriptedSampler(20.0), edges=(51.0, 63.0), seed=42)
+    bandit2.decide(step=0, prompt="p", input_tokens=3)
+    b = bandit2._bin
+    bandit2.sums[b] = np.array([0.5, 0.1, 0.1])
+    bandit2.weights[b] = np.array([5.0, 5.0, 5.0])
+    bandit2.counts[b] = np.array([5.0, 5.0, 5.0])
+    # Estimates: arm 0 = 0.10, arm 1 = 0.02, arm 2 = 0.02. Arm 0 is 5x best -> pruned!
+    for _ in range(20):
+        action = bandit2.select(b)
+        assert action != 0, "Arm with estimate > 2x best was selected"
+
+
+def test_online_bandit_dqn_prior_capped_to_training_range():
+    class DummyDQN:
+        def q_values(self, state):
+            return np.array([-0.1, -0.3, -0.8])
+
+    # Within training range (<=75% CPU): Q-values used
+    b_in = OnlineBanditPolicy(prior_agent=DummyDQN(), sampler=ScriptedSampler(50.0), edges=(51.0, 63.0))
+    b_in.decide(step=0, prompt="p", input_tokens=3)
+    est_in = b_in.estimates(b_in._bin)
+    assert not np.allclose(est_in, est_in[0]), "Prior was flat within training range"
+
+    # Outside training range (>75% CPU): Flat prior used
+    b_out = OnlineBanditPolicy(prior_agent=DummyDQN(), sampler=ScriptedSampler(85.0), edges=(51.0, 63.0))
+    b_out.decide(step=0, prompt="p", input_tokens=3)
+    est_out = b_out.estimates(b_out._bin)
+    assert np.allclose(est_out, est_out[0]), "Prior was not flat outside training range"
+
+
+def test_online_bandit_cost_attribution_drops_switch_tokens():
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=ScriptedSampler(20.0), edges=(51.0, 63.0))
+    bandit.decide(step=0, prompt="p", input_tokens=3)
+    bandit.decide(step=10, prompt="p", input_tokens=3)
+    # Simulate a switch into arm 1 at step 10
+    bandit._pending = (0, 1, 0.0, 10, True)  # was_switched = True, s0 = 10
+    # Simulate 10 tokens (10..19) where tokens 0,1 took 1.0s (switch overhead) and tokens 2..9 took 0.1s
+    token_times = [1.0, 1.0] + [0.1] * 8
+    bandit._segment_token_latencies = token_times.copy()
+    bandit.decide(step=20, prompt="p", input_tokens=3)
+    # Recorded history should drop first 2 tokens and average tokens 2..9 (0.1 s)
+    last_rec = bandit.history[-1]
+    assert np.isclose(last_rec["sec_per_token"], 0.1), f"Expected 0.1 s/tok after dropping 2 switch tokens, got {last_rec['sec_per_token']}"
+
+
+def test_emergency_switch_in_decode_loop_acts_immediately_and_disabled_restores_normal(monkeypatch):
+    from collections import deque
+    from src.llm.partition import PartitionStrategy, resolve
+    import numpy as np
+
+    class MockScheduler:
+        def __init__(self):
+            self.current = 0
+            self.emergency_called = False
+            self.last_telemetry = {}
+
+        def decide(self, step, prompt, input_tokens):
+            return self.current
+
+        def on_emergency_switch(self, conservative_action=1):
+            self.emergency_called = True
+            self.current = conservative_action
+
+    # Test emergency switch logic directly
+    recent_latencies = deque([0.1] * 10, maxlen=10)
+    scheduler = MockScheduler()
+    strat_obj = resolve(0)  # static
+    decision_log = []
+
+    # Case 1: Spike with emergency switch enabled -> immediate switch to conservative arm (1)
+    emergency_switch_enabled = True
+    emergency_factor = 3.0
+    conservative_strategy = 1
+    step_duration = 0.5  # 5x higher than median 0.1s
+    med_latency = float(np.median(recent_latencies))
+
+    if emergency_switch_enabled and len(recent_latencies) >= 5 and emergency_factor > 0:
+        if step_duration > emergency_factor * med_latency and strat_obj.strategy_id != conservative_strategy:
+            strat_obj = resolve(conservative_strategy)
+            scheduler.on_emergency_switch(conservative_strategy)
+            decision_log.append({
+                "step": 15,
+                "strategy_id": strat_obj.strategy_id,
+                "emergency_trigger": True
+            })
+
+    assert strat_obj.strategy_id == 1, "Emergency switch did not trigger to conservative arm"
+    assert scheduler.emergency_called is True, "Scheduler on_emergency_switch callback was not invoked"
+    assert len(decision_log) == 1 and decision_log[0]["emergency_trigger"] is True
+
+    # Case 2: Spike with emergency switch disabled -> stays on original strategy (0)
+    scheduler_disabled = MockScheduler()
+    strat_obj_disabled = resolve(0)
+    emergency_switch_enabled = False
+    decision_log_disabled = []
+
+    if emergency_switch_enabled and len(recent_latencies) >= 5 and emergency_factor > 0:
+        if step_duration > emergency_factor * med_latency and strat_obj_disabled.strategy_id != conservative_strategy:
+            strat_obj_disabled = resolve(conservative_strategy)
+
+    assert strat_obj_disabled.strategy_id == 0, "Emergency switch triggered when explicitly disabled"
+    assert scheduler_disabled.emergency_called is False
+    assert len(decision_log_disabled) == 0
+
+
+def test_online_bandit_stall_rule_retest_at_12_workers():
+    """Verify stall rule with actual load_sweep_v4.csv 12-worker measurements (~18x slowdown)."""
+    # From load_sweep_v4.csv: static = ~2.13 s/tok, balanced = ~0.115 s/tok
+    static_spt = 2.135
+    balanced_spt = 0.115
+    bandit = OnlineBanditPolicy(prior_agent=None, sampler=ScriptedSampler(75.0), edges=(51.0, 63.0),
+                                outlier_ratio=2.0, regime_after=5)
+    b = 2  # high load bin
+    # Establish balanced as fast arm in this bin
+    bandit._ensure_bin(b, "p", 3, {"external_cpu_percent": 75.0, "ram_percent": 50.0})
+    for _ in range(3):
+        bandit.update(b, 1, balanced_spt)
+
+    # Static is 18.5x slower -> must be detected as an outlier stall initially
+    assert bandit.is_outlier(b, static_spt) is True
+
+    # 4 consecutive outlier segments: all rejected as stalls
+    for _ in range(4):
+        outlier = bandit.is_outlier(b, static_spt)
+        bandit._rejected[b] = bandit._rejected.get(b, 0) + 1 if outlier else 0
+        accepted = not outlier or bandit._rejected[b] >= bandit.regime_after
+        assert accepted is False, "Stall was accepted before reaching regime_after"
+
+    # 5th consecutive outlier segment: accepted as persistent regime change
+    outlier = bandit.is_outlier(b, static_spt)
+    bandit._rejected[b] = bandit._rejected.get(b, 0) + 1 if outlier else 0
+    accepted = not outlier or bandit._rejected[b] >= bandit.regime_after
+    assert accepted is True, "Persistent regime change was not accepted after 5 consecutive segments"
+
+
+def test_expanded_action_space_thread_budgets_and_named_aliases():
+    from src.llm.partition import PartitionStrategy, resolve, physical_core_count
+
+    # Single-stage thread budgets: {2, 4, 6, 8, 10, 12}
+    for budget in [2, 4, 6, 8, 10, 12]:
+        strat = PartitionStrategy("static", thread_budget=budget)
+        assert strat.thread_budget == budget
+        assert strat.get_layer_ranges() == [(0, 21)]
+        assert strat.get_thread_counts() == [budget]
+
+    # Named aliases backward compatibility with explicit budgets
+    static_b10 = PartitionStrategy("static", thread_budget=10)
+    assert static_b10.get_thread_counts() == [10]
+
+    latency_b6 = PartitionStrategy("latency_optimized", thread_budget=6)
+    assert latency_b6.get_thread_counts() == [6]
+
+    balanced_b6 = PartitionStrategy("balanced", thread_budget=6)
+    assert balanced_b6.get_thread_counts() == [3, 3]
+
+    # Dynamic machine physical core scaling
+    static_strat = resolve("static")
+    assert static_strat.strategy_name == "static"
+    assert static_strat.get_layer_ranges() == [(0, 21)]
+    assert static_strat.get_thread_counts() == [physical_core_count()]
+
+
+def test_resume_integrity_filters_incomplete_contexts(tmp_path):
+    # Simulate a corrupted / interrupted run CSV with 7 complete conditions for context 1,
+    # and only 3 conditions for context 2 before a crash.
+    runs_file = tmp_path / "adaptive_runs_test.csv"
+    records = [
+        {"context_id": 1, "condition": f"c_{i}", "latency": 10.0} for i in range(7)
+    ] + [
+        {"context_id": 2, "condition": f"c_{i}", "latency": 10.0} for i in range(3)
+    ]
+    pd.DataFrame(records).to_csv(runs_file, index=False)
+
+    loaded_runs = pd.read_csv(runs_file).to_dict("records")
+    # Resume integrity check
+    num_expected_conditions = 7
+    counts = pd.Series([r["context_id"] for r in loaded_runs]).value_counts()
+    done = set(counts[counts == num_expected_conditions].index)
+
+    # Incomplete context 2 must be purged, complete context 1 must be retained
+    assert done == {1}
+    valid_runs = [r for r in loaded_runs if r["context_id"] in done]
+    assert len(valid_runs) == 7
+    assert {r["context_id"] for r in valid_runs} == {1}

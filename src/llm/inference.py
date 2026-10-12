@@ -1,7 +1,20 @@
+import os
+import sys
 import time
+from collections import deque
 from functools import lru_cache
 
+_torch_lib = r"C:\Users\Pavithran\AppData\Local\Programs\Python\Python312\Lib\site-packages\torch\lib"
+if os.path.exists(_torch_lib):
+    try:
+        os.add_dll_directory(_torch_lib)
+    except Exception:
+        pass
+    os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
+
+import numpy as np
 import torch
+from src.config import load_config
 from transformers import DynamicCache
 from transformers.masking_utils import create_causal_mask
 
@@ -76,7 +89,10 @@ def generate_partitioned_response(
     decision_interval: int = 10,
     decision_log: list | None = None,
     step_callback=None,
-    ignore_eos: bool = False
+    ignore_eos: bool = False,
+    emergency_switch_enabled: bool | None = None,
+    emergency_factor: float | None = None,
+    conservative_strategy: int | str = 1
 ):
     """
     Executes autoregressive generation using explicit single-node layer-wise partitioning.
@@ -107,10 +123,20 @@ def generate_partitioned_response(
     Returns:
         tuple: (decoded_response_string, stage_telemetry_records_list[, generated_token_ids])
     """
+    if scheduler is not None and decision_interval <= 0:
+        raise ValueError("decision_interval must be positive when a scheduler is used")
+
     tokenizer, model = get_model()
 
     def resolve(s):
         return s if isinstance(s, PartitionStrategy) else apply_partition_strategy(s)
+
+    cfg = load_config()
+    em_cfg = cfg.get("emergency_switch", {})
+    if emergency_switch_enabled is None:
+        emergency_switch_enabled = bool(em_cfg.get("enabled", True))
+    if emergency_factor is None:
+        emergency_factor = float(em_cfg.get("factor", 3.0))
 
     strat_obj = resolve(strategy)
     layer_ranges = strat_obj.get_layer_ranges()
@@ -130,8 +156,10 @@ def generate_partitioned_response(
         with torch.no_grad():
             curr_input_ids = input_ids.clone()
             past_key_values = DynamicCache(config=model.config)
+            recent_token_latencies = deque(maxlen=10)
 
             for step in range(max_new_tokens):
+                t_token_step_start = time.perf_counter()
                 if step_callback is not None:
                     step_callback(step)
 
@@ -146,6 +174,8 @@ def generate_partitioned_response(
                             "step": step,
                             "strategy_id": strat_obj.strategy_id,
                             "strategy": strat_obj.strategy_name,
+                            "thread_counts": stage_threads,
+                            "thread_budget": strat_obj.thread_budget,
                             "decision_overhead_seconds": round(time.perf_counter() - t_decide, 6),
                             **getattr(scheduler, "last_telemetry", {})
                         })
@@ -172,8 +202,10 @@ def generate_partitioned_response(
 
                 # Execute layer partitions sequentially, each with its own thread budget
                 for p_idx, ((start_layer, end_layer), num_threads) in enumerate(zip(layer_ranges, stage_threads), start=1):
+                    thread_config_start = time.perf_counter()
                     if torch.get_num_threads() != num_threads:
                         torch.set_num_threads(num_threads)
+                    thread_config_overhead = time.perf_counter() - thread_config_start
 
                     t_stage_start = time.perf_counter()
 
@@ -203,6 +235,7 @@ def generate_partitioned_response(
                     )
                     handoff_record["token_step"] = step
                     handoff_record["strategy_id"] = strat_obj.strategy_id
+                    handoff_record["thread_config_overhead_seconds"] = round(thread_config_overhead, 8)
                     stage_metrics.append(handoff_record)
 
                 hidden_states = model.model.norm(hidden_states)
@@ -217,6 +250,38 @@ def generate_partitioned_response(
                 next_token_item = next_token.item()
                 generated_tokens.append(next_token_item)
                 curr_input_ids = torch.cat([curr_input_ids, next_token], dim=-1)
+
+                step_duration = time.perf_counter() - t_token_step_start
+                if hasattr(scheduler, "on_token"):
+                    scheduler.on_token(step, step_duration)
+
+                # Emergency switch check: if token latency triples recent median, switch immediately to conservative arm
+                if emergency_switch_enabled and len(recent_token_latencies) >= 5 and emergency_factor > 0:
+                    med_latency = float(np.median(recent_token_latencies))
+                    if step_duration > emergency_factor * med_latency and strat_obj.strategy_id != conservative_strategy:
+                        strat_obj = resolve(conservative_strategy)
+                        layer_ranges = strat_obj.get_layer_ranges()
+                        stage_threads = strat_obj.get_thread_counts()
+                        num_stages = len(layer_ranges)
+                        if torch.get_num_threads() != stage_threads[0]:
+                            torch.set_num_threads(stage_threads[0])
+                        if hasattr(scheduler, "on_emergency_switch"):
+                            scheduler.on_emergency_switch(conservative_strategy)
+                        if decision_log is not None:
+                            decision_log.append({
+                                "step": step,
+                                "strategy_id": strat_obj.strategy_id,
+                                "strategy": strat_obj.strategy_name,
+                                "thread_counts": stage_threads,
+                                "thread_budget": strat_obj.thread_budget,
+                                "emergency_trigger": True,
+                                "token_duration": round(step_duration, 4),
+                                "recent_median": round(med_latency, 4),
+                                "decision_overhead_seconds": 0.0,
+                                **getattr(scheduler, "last_telemetry", {})
+                            })
+
+                recent_token_latencies.append(step_duration)
 
                 if next_token_item == tokenizer.eos_token_id and not ignore_eos:
                     break

@@ -31,16 +31,22 @@ if str(ROOT_DIR) not in sys.path:
 from src.benchmark.evaluate import oracle_wins, paired_differences, summarize_runs
 from src.benchmark.plots import plot_latency_by_load, plot_paired_differences
 from src.data.load_prompts import load_prompts
-from src.llm.inference import generate_partitioned_response, get_tokenizer
 from src.llm.partition import PartitionStrategy, apply_partition_strategy
 from src.telemetry.load_generator import BackgroundCPULoad
 from src.telemetry.monitor import collect_metrics
+
+
+def _load_inference():
+    """Import the LLM inference layer only when a real generation call is needed."""
+    from src.llm.inference import generate_partitioned_response, get_tokenizer
+    return generate_partitioned_response, get_tokenizer
 
 STRATEGIES = [0, 1, 2]  # static, balanced, latency_optimized
 
 
 def execute_strategy(prompt: str, strategy: PartitionStrategy, max_new_tokens: int):
     """Run one request and return its measured outcome."""
+    generate_partitioned_response, _ = _load_inference()
     start_time = time.perf_counter()
     response, stage_records, token_ids = generate_partitioned_response(
         prompt=prompt,
@@ -63,6 +69,7 @@ def execute_strategy(prompt: str, strategy: PartitionStrategy, max_new_tokens: i
 
 def warm_up(prompt: str):
     print("Warm-up runs...", flush=True)
+    generate_partitioned_response, _ = _load_inference()
     for strat_id in STRATEGIES:
         generate_partitioned_response(prompt, strategy=strat_id, max_new_tokens=8)
 
@@ -84,6 +91,7 @@ def run_fixed_strategy_evaluation(
     rng = np.random.default_rng(seed)
     all_prompts = load_prompts(csv_path=str(data_dir / "prompts.csv"), limit=prompt_offset + num_prompts)
     prompts = all_prompts[prompt_offset:]
+    _, get_tokenizer = _load_inference()
     tokenizer = get_tokenizer()
 
     contexts = [

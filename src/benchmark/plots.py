@@ -13,9 +13,11 @@ COLORS = {
     "rl_policy": "#e7298a",
     "rule_once": "#a6761d",
     "rule_adaptive": "#e6ab02",
+    "rule_noh": "#66c2a5",
     "rl_once": "#66a61e",
     "rl_adaptive": "#e7298a",
-    "bandit_adaptive": "#1b9e77"
+    "bandit_adaptive": "#1b9e77",
+    "cores_heuristic": "#7570b3"
 }
 
 

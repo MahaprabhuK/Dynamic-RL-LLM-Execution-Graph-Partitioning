@@ -18,3 +18,9 @@ strategies:
   latency_optimized:
     layer_ranges: [[0, 21]]
     thread_fractions: [0.6]
+
+# Emergency switch: bypasses interval and hysteresis if token latency spikes > 3x recent median
+emergency_switch:
+  enabled: true
+  factor: 3.0
+  conservative_strategy: 1

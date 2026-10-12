@@ -45,14 +45,32 @@ if str(ROOT_DIR) not in sys.path:
 from src.benchmark.evaluate import paired_differences, summarize_runs
 from src.benchmark.plots import plot_latency_by_load, plot_paired_differences, plot_strategy_timeline
 from src.data.load_prompts import load_prompts
-from src.llm.inference import generate_partitioned_response
 from src.llm.partition import PartitionStrategy
-from src.rl.dqn_agent import DQNAgent
-from src.scheduler.adaptive import FixedPolicy, OnlineBanditPolicy, RLPolicy, ThresholdPolicy
+from src.scheduler.adaptive import CoresHeuristicPolicy, FixedPolicy, OnlineBanditPolicy, RLPolicy, ThresholdPolicy
 from src.telemetry.load_generator import TokenScheduledLoad
 from src.telemetry.monitor import BackgroundLoadSampler
 
 FIXED = ["static", "balanced", "latency_optimized"]
+
+
+def _load_inference():
+    from src.llm.inference import generate_partitioned_response
+
+    return generate_partitioned_response
+
+
+def _load_dqn_agent():
+    from src.rl.dqn_agent import DQNAgent
+
+    return DQNAgent
+
+
+def _count_decision_switches(decision_log):
+    configurations = [
+        (row["strategy_id"], tuple(row.get("thread_counts", ())))
+        for row in decision_log
+    ]
+    return sum(previous != current for previous, current in zip(configurations, configurations[1:]))
 
 
 def make_scenarios(heavy: int, switch_token: int, ramp=None):
@@ -72,21 +90,33 @@ def parse_ramp(text):
     return [tuple(int(v) for v in part.split(":")) for part in text.split(",")] if text else None
 
 
-def make_policies(agent, threshold, sampler, patience=2, seed=0, bandit_edges=(35.0,), bin_margin=8.0):
+def make_policies(agent, threshold, sampler, patience=2, seed=0, bandit_edges=(35.0,), bin_margin=8.0,
+                  thread_budgets=PartitionStrategy.THREAD_BUDGETS, emergency_threshold=None):
     policies = {name: (lambda sid=sid: FixedPolicy(sid))
                 for sid, name in PartitionStrategy.STRATEGIES.items()}
-    policies["rule_adaptive"] = lambda: ThresholdPolicy(threshold, sampler=sampler, patience=patience)
+    policies["rule_adaptive"] = lambda: ThresholdPolicy(
+        threshold, sampler=sampler, patience=patience, emergency_threshold=emergency_threshold,
+        emergency_action=1
+    )
+    policies["rule_noh"] = lambda: ThresholdPolicy(threshold, sampler=sampler, patience=0,
+                                                    emergency_threshold=emergency_threshold, emergency_action=1)
+    policies["cores_heuristic"] = lambda: CoresHeuristicPolicy(
+        sampler=sampler, thread_budgets=thread_budgets, patience=patience,
+        emergency_threshold=emergency_threshold
+    )
 
     prior = None
     if agent is not None:
         policies["rl_once"] = lambda: RLPolicy(agent, once=True, sampler=sampler)
-        policies["rl_adaptive"] = lambda: RLPolicy(agent, sampler=sampler, patience=patience)
+        policies["rl_adaptive"] = lambda: RLPolicy(agent, sampler=sampler, patience=patience,
+                               emergency_threshold=emergency_threshold, emergency_action=1)
+        DQNAgent = _load_dqn_agent()
         prior = DQNAgent(state_size=agent.state_size, action_size=agent.action_size)
         prior.model.load_state_dict(agent.model.state_dict())
 
     # The bandit keeps learning across requests: one shared instance
     bandit = OnlineBanditPolicy(prior_agent=prior, sampler=sampler, seed=seed, edges=bandit_edges,
-                                bin_margin=bin_margin)
+                                bin_margin=bin_margin, emergency_threshold=emergency_threshold)
     policies["bandit_adaptive"] = lambda: bandit
     return policies, bandit
 
@@ -106,17 +136,26 @@ def run_adaptive_evaluation(
     resume=False,
     ramp=None,
     bandit_edges=(35.0,),
-    bin_margin=8.0
+    bin_margin=8.0,
+    thread_budgets=PartitionStrategy.THREAD_BUDGETS,
+    emergency_threshold=None
 ):
     data_dir = ROOT_DIR / "data" / "processed"
     results_dir = ROOT_DIR / "results"
     data_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
+    if decision_interval <= 0:
+        raise ValueError("decision_interval must be positive")
+    thread_budgets = tuple(int(value) for value in thread_budgets)
 
     agent = None
-    if (ROOT_DIR / model_path).exists():
+    resolved_model_path = ROOT_DIR / model_path
+    if not resolved_model_path.exists() and (ROOT_DIR / 'data' / 'processed' / 'dqn_model_v6.pth').exists():
+        resolved_model_path = ROOT_DIR / 'data' / 'processed' / 'dqn_model_v6.pth'
+    if resolved_model_path.exists():
+        DQNAgent = _load_dqn_agent()
         agent = DQNAgent(state_size=4, action_size=3)
-        agent.load(str(ROOT_DIR / model_path))
+        agent.load(str(resolved_model_path))
     else:
         print(f"No DQN model at {model_path}; RL conditions skipped, bandit starts without a prior.", flush=True)
 
@@ -128,8 +167,10 @@ def run_adaptive_evaluation(
     rng.shuffle(contexts)
 
     sampler = BackgroundLoadSampler().start()
+    generate_partitioned_response = _load_inference()
     policies, bandit = make_policies(agent, threshold, sampler, patience=patience, seed=seed,
-                                     bandit_edges=bandit_edges, bin_margin=bin_margin)
+                                     bandit_edges=bandit_edges, bin_margin=bin_margin,
+                                     thread_budgets=thread_budgets, emergency_threshold=emergency_threshold)
     # Drawn up front so a resumed run replays exactly the same condition orders
     orders = [rng.permutation(list(policies)) for _ in contexts]
 
@@ -181,7 +222,6 @@ def run_adaptive_evaluation(
                     )
                     latency = time.perf_counter() - t0
 
-                chosen = [d["strategy_id"] for d in log]
                 per_token = pd.DataFrame(stages).groupby("token_step").agg(
                     token_seconds=("stage_latency_seconds", "sum"), strategy_id=("strategy_id", "first"))
                 runs.append({
@@ -194,8 +234,18 @@ def run_adaptive_evaluation(
                     "latency_seconds": round(latency, 4),
                     "tokens_per_second": round(len(token_ids) / latency, 3),
                     "num_decisions": len(log),
-                    "num_switches": int(sum(a != b for a, b in zip(chosen, chosen[1:]))),
+                    "num_switches": _count_decision_switches(log),
                     "decision_overhead_seconds": round(sum(d["decision_overhead_seconds"] for d in log), 4),
+                    "thread_config_overhead_seconds": round(
+                        sum(s.get("thread_config_overhead_seconds", 0.0) for s in stages), 8
+                    ),
+                    "decision_interval": decision_interval,
+                    "patience": patience,
+                    "policy_patience": 0 if cond == "rule_noh" else patience if cond in {
+                        "rule_adaptive", "cores_heuristic", "rl_adaptive"
+                    } else None,
+                    "emergency_threshold": emergency_threshold,
+                    "thread_budgets": ",".join(map(str, thread_budgets)),
                     **{f"share_{PartitionStrategy(s).strategy_name}": round((per_token["strategy_id"] == s).mean(), 3)
                        for s in PartitionStrategy.STRATEGIES},
                     # summarize_runs expects these columns
@@ -231,17 +281,12 @@ def run_adaptive_evaluation(
     return df
 
 
-def _only(diffs, condition):
-    return diffs[diffs["condition"] == condition] if not diffs.empty else diffs
-
-
 def stalled_contexts(df, ratio=2.0, min_excess_seconds=5.0):
     """
-    Contexts in which any run took more than `ratio` x the median latency of
-    the same condition in the same scenario (and at least `min_excess_seconds`
-    longer). On a RAM-constrained machine these are memory-paging stalls (the
-    whole process freezes at random), which say nothing about the schedulers.
-    A policy that is slow every time (e.g. oversubscription) is not flagged.
+    Contexts containing a latency-only outlier under the supplied threshold.
+
+    This is a sensitivity flag, not evidence that paging occurred. Paging-based
+    exclusion requires independent page-fault or swap telemetry.
     """
     median = df.groupby(["scenario", "condition"])["latency_seconds"].transform("median")
     stalled = (df["latency_seconds"] > ratio * median) & (df["latency_seconds"] > median + min_excess_seconds)
@@ -249,25 +294,20 @@ def stalled_contexts(df, ratio=2.0, min_excess_seconds=5.0):
 
 
 def report_adaptive_results(df, df_timeline, data_dir, results_dir, tag, stall_ratio=2.0):
+    output_tag = f"{tag}r" if tag == "v5" else tag
     stalled = stalled_contexts(df, stall_ratio) if stall_ratio else []
-    if stalled:
-        print(f"\nExcluding {len(stalled)} context(s) with paging stalls (a run > {stall_ratio}x the median of "
-              f"its condition and scenario): {stalled}. Raw data is kept in adaptive_runs_{tag}.csv.", flush=True)
-        df = df[~df["context_id"].isin(stalled)]
-        df_timeline = df_timeline[~df_timeline["context_id"].isin(stalled)]
 
     same_output = df.groupby("context_id")["token_ids"].nunique().eq(1).mean()
 
+    # PRIMARY ANALYSIS: all contexts retained
     summary = summarize_runs(df, ["scenario", "condition"])
-    summary.to_csv(data_dir / f"adaptive_summary_{tag}.csv", index=False)
+    summary.to_csv(data_dir / f"adaptive_summary_{output_tag}.csv", index=False)
 
     conditions = set(df["condition"])
-    best = next(c for c in ["bandit_adaptive", "rl_adaptive", "rule_adaptive"] if c in conditions)
-    diffs = pd.concat([
-        _only(paired_differences(df, "condition", baseline=b, group_col="scenario"), best)
-        for b in sorted(conditions - {best})
-    ], ignore_index=True)
-    diffs.to_csv(data_dir / f"adaptive_paired_diffs_{tag}.csv", index=False)
+    primary = next(c for c in ["rl_adaptive", "rule_adaptive", "bandit_adaptive"] if c in conditions)
+    diffs = paired_differences(df, "condition", baseline=sorted(conditions - {primary}),
+                               conditions=[primary], group_col="scenario")
+    diffs.to_csv(data_dir / f"adaptive_paired_diffs_{output_tag}.csv", index=False)
 
     wide = df.pivot_table(index="context_id", columns="condition", values="latency_seconds")
     scenario_of = df.groupby("context_id")["scenario"].first()
@@ -276,19 +316,40 @@ def report_adaptive_results(df, df_timeline, data_dir, results_dir, tag, stall_r
     regret["scenario"] = scenario_of
 
     print("\n" + "=" * 80, flush=True)
-    print("MEAN LATENCY BY SCENARIO AND CONDITION (seconds)", flush=True)
+    print("PRIMARY ANALYSIS: ALL CONTEXTS (seconds)", flush=True)
     print("=" * 80, flush=True)
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         print(df.pivot_table(index="scenario", columns="condition", values="latency_seconds", aggfunc="mean")
               .round(2).to_string(), flush=True)
-        print(f"\nPAIRED DIFFERENCES: {best} VS OTHERS (negative = {best} faster)", flush=True)
-        print(diffs[["scenario", "baseline", "num_contexts", "mean_diff_seconds", "ci95_low", "ci95_high",
-                     "mean_diff_percent", "significant"]].to_string(index=False), flush=True)
+        print(f"\nPRIMARY PAIRED DIFFERENCES: {primary} VS OTHERS (negative = {primary} faster)", flush=True)
+        cols_show = ["scenario", "baseline", "num_contexts", "mean_diff_seconds", "ci95_low", "ci95_high",
+                     "mean_diff_percent", "p_value_t_raw", "p_value_t_adjusted", "significant"]
+        valid_cols = [c for c in cols_show if c in diffs.columns]
+        print(diffs[valid_cols].to_string(index=False), flush=True)
         print("\nMEAN REGRET VS BEST FIXED STRATEGY IN HINDSIGHT, PER CONTEXT (seconds)", flush=True)
         print(regret.groupby("scenario").mean().round(2).to_string(), flush=True)
         print("\nMEAN STRATEGY SWITCHES PER REQUEST", flush=True)
         print(df.pivot_table(index="scenario", columns="condition", values="num_switches").round(2).to_string(),
               flush=True)
+
+    # SENSITIVITY ANALYSIS: clearly labeled table excluding heuristic outliers
+    if stalled:
+        print("\n" + "=" * 80, flush=True)
+        print(f"SENSITIVITY ANALYSIS: EXCLUDING {len(stalled)} LATENCY OUTLIER CONTEXT(S): {stalled}", flush=True)
+        print("(Sensitivity table: no independent paging telemetry in source data)", flush=True)
+        print("=" * 80, flush=True)
+        df_sens = df[~df["context_id"].isin(stalled)]
+        sens_summary = summarize_runs(df_sens, ["scenario", "condition"])
+        sens_summary.to_csv(data_dir / f"adaptive_summary_sensitivity_{output_tag}.csv", index=False)
+        sens_diffs = paired_differences(df_sens, "condition", baseline=sorted(conditions - {primary}),
+                                        conditions=[primary], group_col="scenario")
+        sens_diffs.to_csv(data_dir / f"adaptive_paired_diffs_sensitivity_{output_tag}.csv", index=False)
+        with pd.option_context("display.width", 200, "display.max_columns", 20):
+            print(df_sens.pivot_table(index="scenario", columns="condition", values="latency_seconds", aggfunc="mean")
+                  .round(2).to_string(), flush=True)
+            print(f"\nSENSITIVITY PAIRED DIFFERENCES: {primary} VS OTHERS", flush=True)
+            valid_sens_cols = [c for c in cols_show if c in sens_diffs.columns]
+            print(sens_diffs[valid_sens_cols].to_string(index=False), flush=True)
 
     if "bandit_adaptive" in regret:
         # Learning curve: does the online bandit improve as it serves more requests?
@@ -302,16 +363,16 @@ def report_adaptive_results(df, df_timeline, data_dir, results_dir, tag, stall_r
     print(f"\nIdentical generated tokens across all conditions: {same_output:.0%} of contexts", flush=True)
     print(f"Mean decision overhead per request: {df['decision_overhead_seconds'].mean():.4f}s", flush=True)
 
-    plot_latency_by_load(summary, "condition", results_dir / f"adaptive_latency_by_scenario_{tag}.png",
+    plot_latency_by_load(summary, "condition", results_dir / f"adaptive_latency_by_scenario_{output_tag}.png",
                          "Latency under changing load", group_col="scenario")
     if not diffs.empty:
-        plot_paired_differences(diffs, results_dir / f"adaptive_paired_diffs_{tag}.png",
-                                f"{best} latency difference vs other policies", group_col="scenario", label_col="baseline")
+        plot_paired_differences(diffs, results_dir / f"adaptive_paired_diffs_{output_tag}.png",
+                                f"{primary} latency difference vs other policies", group_col="scenario", label_col="baseline")
     for scenario in ["spike", "relief"]:
         ctx = df[df["scenario"] == scenario]["context_id"]
         if len(ctx):
             plot_strategy_timeline(df_timeline[df_timeline["context_id"] == ctx.iloc[-1]],
-                                   results_dir / f"adaptive_{scenario}_timeline_{tag}.png",
+                                   results_dir / f"adaptive_{scenario}_timeline_{output_tag}.png",
                                    f"Per-token latency, load {'arrives' if scenario == 'spike' else 'leaves'} mid-generation")
 
 
@@ -321,11 +382,17 @@ if __name__ == "__main__":
     parser.add_argument("--num-prompts", type=int, default=10)
     parser.add_argument("--prompt-offset", type=int, default=20)
     parser.add_argument("--max-new-tokens", type=int, default=200)
-    parser.add_argument("--interval", type=int, default=10, help="Tokens between scheduling decisions.")
+    parser.add_argument("--interval", type=int, choices=[5, 10, 20], default=10,
+                        help="Tokens between scheduling decisions.")
     parser.add_argument("--heavy", type=int, default=8, help="Busy workers during heavy load.")
     parser.add_argument("--switch-token", type=int, default=60, help="Generated tokens until the load changes.")
     parser.add_argument("--threshold", type=float, default=40.0, help="External CPU %% threshold of the rule baseline.")
-    parser.add_argument("--patience", type=int, default=2, help="Hysteresis: decisions in a row needed to switch.")
+    parser.add_argument("--patience", type=int, choices=[0, 1, 2], default=2,
+                        help="Hysteresis decisions before switching (0 and 1 both switch immediately).")
+    parser.add_argument("--thread-budgets", default="2,4,6,8,10,12",
+                        help="Comma-separated core-budget candidates for cores_heuristic.")
+    parser.add_argument("--emergency-threshold", type=float, default=None,
+                        help="External CPU percent that bypasses policy patience at the next decision interval.")
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--tag", default="v4")
     parser.add_argument("--resume", action="store_true", help="Continue an interrupted run with the same tag.")
@@ -363,5 +430,7 @@ if __name__ == "__main__":
         resume=args.resume,
         ramp=parse_ramp(args.ramp),
         bandit_edges=tuple(float(e) for e in args.bandit_edges.split(",")),
-        bin_margin=args.bin_margin
+        bin_margin=args.bin_margin,
+        thread_budgets=tuple(int(value) for value in args.thread_budgets.split(",")),
+        emergency_threshold=args.emergency_threshold
     )

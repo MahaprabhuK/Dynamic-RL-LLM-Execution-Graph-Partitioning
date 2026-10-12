@@ -20,7 +20,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.data.load_prompts import load_prompts
-from src.llm.inference import generate_response, generate_partitioned_response
 from src.llm.partition import PartitionStrategy
 
 NUM_PROMPTS = 3
@@ -28,7 +27,15 @@ MAX_NEW_TOKENS = 100
 
 
 @pytest.fixture(scope="module")
-def monolithic_outputs():
+def model_runtime():
+    from src.llm.inference import generate_response, generate_partitioned_response
+
+    return generate_response, generate_partitioned_response
+
+
+@pytest.fixture(scope="module")
+def monolithic_outputs(model_runtime):
+    generate_response, _ = model_runtime
     prompts = load_prompts(limit=NUM_PROMPTS)
     return [
         (prompt, *generate_response(prompt, max_new_tokens=MAX_NEW_TOKENS, return_token_ids=True))
@@ -37,7 +44,8 @@ def monolithic_outputs():
 
 
 @pytest.mark.parametrize("strategy_id", list(PartitionStrategy.STRATEGIES))
-def test_partitioned_matches_monolithic(monolithic_outputs, strategy_id):
+def test_partitioned_matches_monolithic(monolithic_outputs, model_runtime, strategy_id):
+    _, generate_partitioned_response = model_runtime
     for prompt, mono_text, mono_ids in monolithic_outputs:
         part_text, stages, part_ids = generate_partitioned_response(
             prompt, strategy=strategy_id, max_new_tokens=MAX_NEW_TOKENS, return_token_ids=True
@@ -48,6 +56,8 @@ def test_partitioned_matches_monolithic(monolithic_outputs, strategy_id):
 
 
 def run_equivalence_tests(num_prompts: int = NUM_PROMPTS):
+    from src.llm.inference import generate_response, generate_partitioned_response
+
     print("=" * 80, flush=True)
     print(f"RUNNING FUNCTIONAL EQUIVALENCE TEST ({num_prompts} PROMPTS x 3 STRATEGIES)", flush=True)
     print("=" * 80, flush=True)

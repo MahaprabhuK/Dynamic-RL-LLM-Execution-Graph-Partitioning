@@ -22,8 +22,25 @@ class PartitionStrategy:
         1: "balanced",
         2: "latency_optimized"
     }
+    THREAD_BUDGETS = (2, 3, 4, 6, 8, 10, 12)
+    ACTION_TO_THREAD_BUDGET = {
+        0: 2,
+        1: 4,
+        2: 6,
+        3: 8,
+        4: 10,
+        5: 12
+    }
+    THREAD_BUDGET_TO_ACTION = {v: k for k, v in ACTION_TO_THREAD_BUDGET.items()}
 
-    def __init__(self, strategy_id=0):
+    @classmethod
+    def from_action_index(cls, action_idx: int):
+        """Map six-action DQN policy index (0-5) to single-stage thread budget."""
+        if action_idx not in cls.ACTION_TO_THREAD_BUDGET:
+            raise ValueError(f"Action index must be 0-5, got {action_idx}")
+        return cls("static", thread_budget=cls.ACTION_TO_THREAD_BUDGET[action_idx])
+
+    def __init__(self, strategy_id=0, thread_budget=None):
         if isinstance(strategy_id, str):
             inv_map = {v: k for k, v in self.STRATEGIES.items()}
             if strategy_id in inv_map:
@@ -36,6 +53,9 @@ class PartitionStrategy:
 
         self.strategy_id = strategy_id
         self.strategy_name = self.STRATEGIES[strategy_id]
+        if thread_budget is not None and thread_budget not in self.THREAD_BUDGETS:
+            raise ValueError(f"thread_budget must be one of {self.THREAD_BUDGETS}")
+        self.thread_budget = thread_budget
         self.config = load_config()["strategies"][self.strategy_name]
 
     def get_partition(self):
@@ -76,6 +96,11 @@ class PartitionStrategy:
         """
         Return the intra-op thread count used for each layer stage.
         """
+        if self.thread_budget is not None:
+            stage_count = len(self.config["layer_ranges"])
+            base, remainder = divmod(self.thread_budget, stage_count)
+            return [base + (index < remainder) for index in range(stage_count)]
+
         cores = physical_core_count()
         return [
             max(1, round(fraction * cores))
@@ -125,11 +150,20 @@ def apply_partition_strategy(action):
     Apply a partition strategy selected by the RL agent or user.
 
     Args:
-        action: Integer or string strategy identifier.
+        action: Integer, string strategy identifier, or PartitionStrategy object.
 
     Returns:
         PartitionStrategy object
     """
+    if isinstance(action, PartitionStrategy):
+        return action
+    try:
+        idx = int(action)
+        if idx in {3, 4, 5}:
+            budget = {0: 2, 1: 4, 2: 6, 3: 8, 4: 10, 5: 12}[idx]
+            return PartitionStrategy("static", thread_budget=budget)
+    except (TypeError, ValueError):
+        pass
 
     strategy = PartitionStrategy(action)
 
@@ -147,3 +181,5 @@ if __name__ == "__main__":
         strategy.describe()
 
         print()
+
+resolve = apply_partition_strategy

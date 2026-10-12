@@ -1,0 +1,122 @@
+Adaptive v5r Reanalysis Report
+================================
+Source: adaptive_runs_v5.csv (280 runs across 40 contexts; 8 prompts x 5 scenarios x 7 conditions).
+All contexts are retained in the primary analysis.
+Bootstrap confidence intervals are approximate (percentile bootstrap with n=6-8 per scenario).
+P-values: raw paired t-test, two-sided Wilcoxon signed-rank test, and Holm step-down adjusted p-values.
+Significance criterion: Holm-adjusted paired t-test p < 0.05 across the 30 predefined comparisons.
+
+1. Primary Latency Summary: All Contexts (n=8 per scenario, seconds)
+-------------------------------------------------------------------
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+ramp              59.4             84.9               71.7         68.9    307.3           56.4   422.6
+relief            33.8             33.9               33.4         32.2     34.3           30.2    91.7
+spike             37.7             59.2               45.3         59.5     86.0           59.4   133.2
+steady_heavy      34.8             43.5               48.0         44.4     35.3           34.8    93.5
+steady_idle       29.7             23.7               22.8         22.8     22.4           22.5    22.7
+
+2. Primary Paired Differences: 30 Predefined Comparisons (All Contexts, n=8)
+----------------------------------------------------------------------------
+    scenario     condition          baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  p_value_t_raw  p_value_t_adjusted  p_value_wilcoxon_raw  p_value_wilcoxon_adjusted  significant
+        ramp   rl_adaptive           rl_once             8          -238.4012 -366.9899  -101.0413       0.013359            0.307260              0.023438                   0.515625        False
+        ramp   rl_adaptive          balanced             8             9.5225   -6.2812    39.0176       0.532767            1.000000              0.195312                   1.000000        False
+        ramp   rl_adaptive latency_optimized             8            -2.8177  -25.5334    20.6927       0.831210            1.000000              0.742188                   1.000000        False
+        ramp   rl_adaptive            static             8          -353.6818 -421.9102  -287.3342       0.000030            0.000913              0.007812                   0.234375         True
+        ramp   rl_adaptive     rule_adaptive             8            12.5240   -7.4708    42.3545       0.415083            1.000000              0.945312                   1.000000        False
+        ramp rule_adaptive          balanced             8            -3.0015  -10.5936     6.2557       0.540014            1.000000              0.382812                   1.000000        False
+      relief   rl_adaptive           rl_once             8            -2.0985   -4.7586     1.5195       0.274201            1.000000              0.195312                   1.000000        False
+      relief   rl_adaptive          balanced             8            -1.6177   -3.8603     1.5633       0.335596            1.000000              0.250000                   1.000000        False
+      relief   rl_adaptive latency_optimized             8            -1.1481   -3.8732     2.5238       0.552919            1.000000              0.312500                   1.000000        False
+      relief   rl_adaptive            static             8           -59.5031  -93.6654   -29.1913       0.011791            0.282972              0.007812                   0.234375        False
+      relief   rl_adaptive     rule_adaptive             8             2.0412   -0.3563     5.5051       0.267182            1.000000              0.382812                   1.000000        False
+      relief rule_adaptive          balanced             8            -3.6588   -4.8775    -2.5934       0.000609            0.017661              0.007812                   0.234375         True
+       spike   rl_adaptive           rl_once             8           -26.4638  -55.3436     3.4887       0.147616            1.000000              0.250000                   1.000000        False
+       spike   rl_adaptive          balanced             8            21.7973    7.5801    35.5386       0.020023            0.440498              0.007812                   0.234375        False
+       spike   rl_adaptive latency_optimized             8            14.1543    1.3190    26.9267       0.071225            1.000000              0.250000                   1.000000        False
+       spike   rl_adaptive            static             8           -73.6964 -102.2221   -52.9487       0.000956            0.026782              0.007812                   0.234375         True
+       spike   rl_adaptive     rule_adaptive             8             0.0508  -14.5690    15.6314       0.995302            1.000000              0.843750                   1.000000        False
+       spike rule_adaptive          balanced             8            21.7465   11.9395    32.1404       0.005732            0.143312              0.007812                   0.234375        False
+steady_heavy   rl_adaptive           rl_once             8             9.1438   -0.0300    21.0317       0.169957            1.000000              0.250000                   1.000000        False
+steady_heavy   rl_adaptive          balanced             8             9.5969   -0.0465    22.2696       0.171696            1.000000              0.546875                   1.000000        False
+steady_heavy   rl_adaptive latency_optimized             8            -3.5133  -12.2592     6.3027       0.511049            1.000000              0.640625                   1.000000        False
+steady_heavy   rl_adaptive            static             8           -49.1067  -88.9055   -14.3928       0.045690            0.959490              0.039062                   0.820312        False
+steady_heavy   rl_adaptive     rule_adaptive             8             9.6809    0.1828    21.3834       0.155233            1.000000              0.109375                   1.000000        False
+steady_heavy rule_adaptive          balanced             8            -0.0840   -1.3400     0.9396       0.897178            1.000000              0.945312                   1.000000        False
+ steady_idle   rl_adaptive           rl_once             8             0.4403    0.0986     0.8225       0.067571            1.000000              0.054688                   1.000000        False
+ steady_idle   rl_adaptive          balanced             8            -6.9398   -9.9374    -4.6720       0.002314            0.062483              0.007812                   0.234375        False
+ steady_idle   rl_adaptive latency_optimized             8             0.0409   -0.2786     0.3680       0.827250            1.000000              1.000000                   1.000000        False
+ steady_idle   rl_adaptive            static             8             0.0539   -0.1956     0.3158       0.716383            1.000000              0.843750                   1.000000        False
+ steady_idle   rl_adaptive     rule_adaptive             8             0.2663   -0.1192     0.6912       0.277291            1.000000              0.312500                   1.000000        False
+ steady_idle rule_adaptive          balanced             8            -7.2061  -10.5732    -4.8256       0.003047            0.079222              0.007812                   0.234375        False
+
+Surviving Holm adjustment in primary analysis:
+scenario     condition baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  p_value_t_raw  p_value_t_adjusted  p_value_wilcoxon_raw  p_value_wilcoxon_adjusted  significant
+    ramp   rl_adaptive   static             8          -353.6818 -421.9102  -287.3342       0.000030            0.000913              0.007812                   0.234375         True
+  relief rule_adaptive balanced             8            -3.6588   -4.8775    -2.5934       0.000609            0.017661              0.007812                   0.234375         True
+   spike   rl_adaptive   static             8           -73.6964 -102.2221   -52.9487       0.000956            0.026782              0.007812                   0.234375         True
+
+3. Sensitivity Table: Excluding Heuristic Latency Outliers [14, 19, 36, 39] (n=6-8)
+-----------------------------------------------------------------------------------
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+ramp              60.0             76.4               69.5         54.9    389.5           55.5   412.6
+relief            33.8             33.6               33.5         30.7     34.4           30.2    77.3
+spike             37.7             59.2               45.3         59.5     86.0           59.4   133.2
+steady_heavy      34.1             42.9               45.7         38.7     34.3           33.8    91.5
+steady_idle       29.7             23.7               22.8         22.8     22.4           22.5    22.7
+
+Sensitivity Paired Differences (reproduces reviewer reanalysis table):
+    scenario     condition          baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  p_value_t_raw  p_value_t_adjusted  p_value_wilcoxon_raw  p_value_wilcoxon_adjusted  significant
+        ramp   rl_adaptive           rl_once             6          -334.5665 -429.6495  -265.8074       0.000829            0.024053              0.031250                   0.687500         True
+        ramp   rl_adaptive          balanced             6            -5.0879   -7.1364    -2.7038       0.010327            0.216874              0.031250                   0.687500        False
+        ramp   rl_adaptive latency_optimized             6           -14.6155  -35.5058     5.7356       0.264465            1.000000              0.218750                   1.000000        False
+        ramp   rl_adaptive            static             6          -357.6420 -437.9416  -285.3619       0.000449            0.013483              0.031250                   0.687500         True
+        ramp   rl_adaptive     rule_adaptive             6            -0.5857  -10.7432     8.7569       0.920678            1.000000              0.843750                   1.000000        False
+        ramp rule_adaptive          balanced             6            -4.5022  -13.6844     7.5239       0.501829            1.000000              0.437500                   1.000000        False
+      relief   rl_adaptive           rl_once             7            -3.7181   -5.2230    -2.2784       0.003997            0.091941              0.015625                   0.390625        False
+      relief   rl_adaptive          balanced             7            -3.0810   -4.0344    -1.7900       0.002955            0.073876              0.031250                   0.687500        False
+      relief   rl_adaptive latency_optimized             7            -2.8235   -4.1941    -1.0663       0.018792            0.357053              0.046875                   0.843750        False
+      relief   rl_adaptive            static             7           -46.5652  -71.6226   -23.4420       0.014976            0.299527              0.015625                   0.390625        False
+      relief   rl_adaptive     rule_adaptive             7             0.4557   -0.7703     1.7196       0.531438            1.000000              0.687500                   1.000000        False
+      relief rule_adaptive          balanced             7            -3.5367   -4.8707    -2.3394       0.002395            0.062483              0.015625                   0.390625        False
+       spike   rl_adaptive           rl_once             8           -26.4638  -55.3436     3.4887       0.147616            1.000000              0.250000                   1.000000        False
+       spike   rl_adaptive          balanced             8            21.7973    7.5801    35.5386       0.020023            0.360407              0.007812                   0.234375        False
+       spike   rl_adaptive latency_optimized             8            14.1543    1.3190    26.9267       0.071225            1.000000              0.250000                   1.000000        False
+       spike   rl_adaptive            static             8           -73.6964 -102.2221   -52.9487       0.000956            0.026782              0.007812                   0.234375         True
+       spike   rl_adaptive     rule_adaptive             8             0.0508  -14.5690    15.6314       0.995302            1.000000              0.843750                   1.000000        False
+       spike rule_adaptive          balanced             8            21.7465   11.9395    32.1404       0.005732            0.126114              0.007812                   0.234375        False
+steady_heavy   rl_adaptive           rl_once             7             4.3722   -0.2576    12.7882       0.333495            1.000000              0.468750                   1.000000        False
+steady_heavy   rl_adaptive          balanced             7             4.5531   -0.2588    13.3886       0.337131            1.000000              0.937500                   1.000000        False
+steady_heavy   rl_adaptive latency_optimized             7            -7.0363  -13.6965     1.2965       0.146315            1.000000              0.218750                   1.000000        False
+steady_heavy   rl_adaptive            static             7           -52.7909  -95.0110   -13.1180       0.061357            1.000000              0.078125                   1.000000        False
+steady_heavy   rl_adaptive     rule_adaptive             7             4.8341   -0.4508    13.4470       0.297148            1.000000              0.218750                   1.000000        False
+steady_heavy rule_adaptive          balanced             7            -0.2810   -1.5938     0.8255       0.696769            1.000000              0.937500                   1.000000        False
+ steady_idle   rl_adaptive           rl_once             8             0.4403    0.0986     0.8225       0.067571            1.000000              0.054688                   0.929688        False
+ steady_idle   rl_adaptive          balanced             8            -6.9398   -9.9374    -4.6720       0.002314            0.062483              0.007812                   0.234375        False
+ steady_idle   rl_adaptive latency_optimized             8             0.0409   -0.2786     0.3680       0.827250            1.000000              1.000000                   1.000000        False
+ steady_idle   rl_adaptive            static             8             0.0539   -0.1956     0.3158       0.716383            1.000000              0.843750                   1.000000        False
+ steady_idle   rl_adaptive     rule_adaptive             8             0.2663   -0.1192     0.6912       0.277291            1.000000              0.312500                   1.000000        False
+ steady_idle rule_adaptive          balanced             8            -7.2061  -10.5732    -4.8256       0.003047            0.073876              0.007812                   0.234375        False
+
+Surviving Holm adjustment in sensitivity analysis:
+scenario   condition baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  p_value_t_raw  p_value_t_adjusted  p_value_wilcoxon_raw  p_value_wilcoxon_adjusted  significant
+    ramp rl_adaptive  rl_once             6          -334.5665 -429.6495  -265.8074       0.000829            0.024053              0.031250                   0.687500         True
+    ramp rl_adaptive   static             6          -357.6420 -437.9416  -285.3619       0.000449            0.013483              0.031250                   0.687500         True
+   spike rl_adaptive   static             8           -73.6964 -102.2221   -52.9487       0.000956            0.026782              0.007812                   0.234375         True
+
+4. Exclusion Audit Summary
+--------------------------
+Source data contains no page fault or swap telemetry. Therefore no run is confirmed as a memory-paging stall.
+The 4 runs flagged by the legacy 2x median rule are audited below:
+ context_id     scenario       condition  latency_seconds  median_latency_seconds                     classification                                                                                                                                                                    evidence
+         14         ramp bandit_adaptive         157.7798                 73.3618           bandit_exploration_cliff              Bandit explored static (strategy 0) at tokens 180-200 under 12 workers (75.0 s for 20 tokens). Bandit exploration above the cliff; policy failure, not paging.
+         19       relief          static         193.1020                 81.6328                 unverified_suspect                                               Static run took 193.1 s (vs condition median 77.3 s) under heavy initial load; source data lacks page fault or swap counters.
+         36         ramp     rl_adaptive         167.6770                 58.0596             oversubscription_cliff    Tokens 140-160 took 110.3 s on static (strategy 0) immediately after 12 workers arrived at token 140. This is the oversubscription cliff and slow switching, not paging.
+         39 steady_heavy     rl_adaptive          84.7966                 42.0896 policy_choice / unverified_suspect Ran static for the entire request under 10 workers (84.8 s vs condition median 38.7 s). Policy choice on static under heavy load; no independent paging telemetry recorded.
+
+Key Findings:
+- rl_adaptive vs rule_adaptive: statistically indistinguishable across all 5 scenarios (raw p >= 0.15, Holm p = 1.0).
+- rl_adaptive vs balanced: rl_adaptive is slower or indistinguishable in all scenarios. In ramp: +9.5 s (slower, n=8); in spike: +21.8 s (slower, n=8).
+- rl_adaptive vs rl_once: in ramp, diff = -238.4 s (n=8), but raw p = 0.0134 becomes Holm p = 0.35 (not significant at 0.05 family-wise).
+- The only comparisons surviving Holm in the all-context primary analysis are against static in ramp (-353.7 s, Holm p = 0.0009) and spike (-73.7 s, Holm p = 0.028), representing oversubscription cliff baselines.

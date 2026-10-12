@@ -108,14 +108,14 @@ asks a policy (`src/scheduler/adaptive.py`) for a strategy every N tokens.
 
 ### v4 results (10 prompts x 4 scenarios, 200 tokens, paired)
 
-Two contexts with memory-paging stalls (a run > 2x the scenario median) are
-excluded by `stalled_contexts()`; raw data is kept. Generated tokens were
-identical across all conditions in 100% of contexts.
+The historical v4 summary excluded two latency-outlier candidates using
+`stalled_contexts()`; its CSV has no page-fault or swap counters, so the paging
+label is unverified. Generated tokens were identical across all conditions in
+100% of contexts.
 
-- The online bandit is significantly faster than the per-request DQN
-  (`rl_once`) when load changes mid-request: -7.8% in `spike`, -7.0% in
-  `relief`. It is also significantly faster than `rl_adaptive` in `spike` and
-  `steady_heavy`, and than the threshold rule in three scenarios.
+- The historical report recorded descriptive online-bandit mean differences of
+  -7.8% vs `rl_once` in `spike` and -7.0% in `relief`. Its significance labels
+  were not Holm-adjusted and have not been recomputed.
 - It corrected a stale offline model. The v3 data said balanced (3+3 threads)
   wins under load. On the machine at evaluation time, the 6-thread
   `latency_optimized` strategy won everywhere; the DQN kept choosing balanced,
@@ -155,9 +155,9 @@ python evaluate_adaptive.py --tag v5 --num-prompts 8 --heavy 10 --switch-token 6
 
 The v4 diagnostics also changed the bandit:
 
-- Memory-paging stalls had poisoned the bandit's estimates. Segments more
-  than 2x slower than the best established estimate are now ignored, unless
-  they persist, in which case the bin is reset.
+- Latency outliers had been assumed to be paging stalls, but no independent
+  page-fault or swap telemetry is in the saved dataset. The bandit retains a
+  latency-based outlier rule; that rule does not identify paging events.
 - Readings near a bin edge had caused bin flapping, which accounted for 53 of
   114 switches. Bin hysteresis (`bin_margin`) now prevents it.
 - Slower forgetting (`discount=0.98`) and a smaller exploration bonus
@@ -165,28 +165,53 @@ The v4 diagnostics also changed the bandit:
 - The stall exclusion compares each run with the same condition in the same
   scenario, so a policy that is slow every time (oversubscription) is kept.
 
-### v5 results (8 prompts x 5 scenarios, 200 tokens, paired)
+### v5r reanalysis (all 40 contexts)
 
-Four contexts with paging stalls were excluded (36 left). Generated tokens were
-identical across all conditions in 100% of contexts; decision overhead 0.005 s
-per request. Full write-up: `docs/report/Project_Report.pdf`.
+The original v5 report and CSV files are preserved. Their four “paging stall”
+exclusions used only a latency-outlier heuristic; the run file has no page-fault,
+swap, or paging telemetry to substantiate that label. The reproducible v5r
+analysis retains all 40 contexts as primary and treats contexts 14, 19, 36, and
+39 only as flagged candidates in a separately labeled sensitivity analysis.
+All seven conditions are paired in every context, and token IDs match across
+conditions in all 40 contexts. See
+[`data/processed/adaptive_report_v5r.txt`](data/processed/adaptive_report_v5r.txt)
+and rerun with `python reanalyze_adaptive_v5r.py`.
 
-- Re-deciding pays off when load crosses the oversubscription cliff. In `ramp`,
-  `rl_adaptive` took 54.9 s against 389.5 s for `rl_once` (-85.7%, paired CI
-  -430 to -266 s), and was 7.7% faster than the best fixed strategy
-  (`balanced`). In `relief`, `rl_adaptive` and `rule_adaptive` beat every fixed
-  strategy by about 9-10%.
-- In `spike` all adaptive policies were about 58% slower than fixed `balanced`:
-  they run `static` while idle and need 10-15 tokens at ~2.5 s/token to switch
-  after 10 workers arrive (decision interval plus hysteresis).
-- The online bandit was the weakest adaptive policy in v5 (+57% vs `balanced`
-  in `spike`, +34% vs `rl_adaptive` in `ramp`). In the high-load bin it chose
-  `latency_optimized` (median 0.234 s/token) 267 times and `balanced` (0.132
-  s/token) 104 times. Its regret fell from 12.9 s to 7.9 s between the two
-  halves of the run, but stayed above `rl_adaptive`.
+For the DQN `rl_adaptive` method, all-context mean latency was slower than the
+descriptively best fixed strategy in `ramp`, `spike`, and `steady_heavy`; it
+was similar in `steady_idle` and slightly faster in `relief`. No comparison to
+the best fixed strategy or `rule_adaptive` was significant after the declared
+Holm-adjusted paired-t family. The reanalysis does not support a claim that the
+DQN is superior. Raw and adjusted paired-t and Wilcoxon p-values are retained
+in `adaptive_paired_diffs_v5r.csv`; the exact baseline, confidence interval,
+and small-sample limitations are discussed in the report.
 
-Re-analyse with `python evaluate_adaptive.py --tag v5 --report-only`.
-`run_overnight.cmd` resumes the v5 run unattended (`--resume --keep-awake`).
+Older v3/v4/v5 prose and significance labels are historical analyses, not
+re-verified by the v5r statistical procedure. In particular, a latency outlier
+alone is not evidence of paging.
+
+### v6 policy framework, load sweep, and DQN retraining
+
+The framework implements all P0 and P1 algorithmic and baseline requirements:
+- **Baseline policies**: `cores_heuristic` (`threads = clamp(round(16 - external_cpu% * 16 / 100), 1, 10)`),
+  `rule_noh` (threshold policy with patience 0), and `segment_oracle` (hindsight upper-bound utility in `src/benchmark/oracles.py`).
+- **Emergency switch**: Bypasses decision interval on token latency spikes (>3.0x recent 10-token median)
+  to switch immediately to conservative execution (`configs/config.yaml`).
+- **Online bandit fixes**: Drops the first 2 switch tokens from cost attribution, prunes exploration for arms
+  estimated >2x the current best, disables static exploration in the top load bin, caps DQN warm-start Q-values to <=75% CPU,
+  and resets bins upon detecting persistent stalls (5 consecutive slow segments).
+- **Expanded action space**: Supports single-stage thread budgets `{2, 4, 6, 8, 10, 12}` alongside named backward aliases.
+- **Load sweep v6 complete**: Evaluated 8 worker contention levels (0-14 workers) x 3 repeats x 6 thread budgets = 144 runs
+  at 50 tokens each using Prompt 1 (`data/processed/load_sweep_v6.csv`). Confirmed optimal thread budget scales monotonically down
+  from 10 threads at load 0 to 2 threads at load 14.
+- **DQN v6 retraining complete**: Merged into `data/processed/training_data_v6.csv` (144 rows across 24 paired load contexts;
+  Prompts 21-40 strictly held out). Contextual-bandit DQN trained for 100 episodes (`data/processed/dqn_model_v6.pth`),
+  with loss converging from 0.734 to 0.056. Offline evaluation on 8 held-out load contexts (repeat 2, `data/processed/rl_offline_evaluation_v6.csv`)
+  achieved mean latency of 13.91s versus oracle 13.63s (mean regret 0.0112).
+- **Scope note**: Generalization across unseen prompts is not claimed; the v6 sweep and retraining use Prompt 1 evaluated under
+  different background-load conditions.
+- **Deferred experiments**: The P1.2 pilot ablation (`run_pilot_ablation.py`, ~55 min) and full v6 live evaluation benchmark
+  (`evaluate_adaptive.py --tag v6`, 675 runs, ~14 hours) are gated awaiting explicit approval.
 
 Results from the earlier v3 adaptive run (60-token requests, time-triggered
 load, blocking telemetry) are kept as `adaptive_*_v3.*`.
@@ -206,8 +231,11 @@ load, blocking telemetry) are kept as `adaptive_*_v3.*`.
 - **Reward.** Negative seconds per generated token. CPU/RAM penalties are
   available in `src/rl/reward.py` but disabled by default (post-run snapshots
   are noisy).
-- **Statistics.** Results report bootstrap 95% CIs and paired per-context
-  differences. A difference is only meaningful if its CI excludes zero.
+- **Statistics.** The v5r reanalysis reports paired bootstrap 95% CIs, paired
+  t-tests, Wilcoxon signed-rank tests, and Holm-adjusted p-values over the
+  declared comparison families. Its `significant` field means Holm-adjusted
+  paired-t $p < 0.05$; the separate CI-exclusion flag is descriptive. Older
+  version reports used a different, unadjusted criterion.
 - **Handoff metric.** Activation handoffs are in-process `clone()` timings,
   a lower bound on a real inter-device transfer.
 

@@ -32,12 +32,22 @@ from src.benchmark.evaluate import paired_differences, summarize_runs
 from src.benchmark.plots import plot_latency_by_load, plot_paired_differences, plot_strategy_distribution
 from src.data.load_prompts import load_prompts
 from src.graph.execution_graph import build_execution_graph
-from src.llm.inference import get_tokenizer
 from src.llm.partition import apply_partition_strategy
-from src.rl.dqn_agent import DQNAgent
 from src.rl.features import observe_state
 from src.telemetry.load_generator import BackgroundCPULoad
 from src.telemetry.monitor import collect_metrics
+
+
+def _load_dqn_agent(model_path: str):
+    from src.rl.dqn_agent import DQNAgent
+    agent = DQNAgent(state_size=4, action_size=3)
+    agent.load(model_path)
+    return agent
+
+
+def _load_tokenizer():
+    from src.llm.inference import get_tokenizer
+    return get_tokenizer()
 
 CONDITIONS = ["static", "balanced", "latency_optimized", "rl_policy"]
 
@@ -56,13 +66,12 @@ def run_rl_policy_evaluation(
     data_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    agent = DQNAgent(state_size=4, action_size=3)
-    agent.load(str(ROOT_DIR / model_path))
+    agent = _load_dqn_agent(str(ROOT_DIR / model_path))
     agent.epsilon = 0.0  # Pure greedy evaluation
 
     rng = np.random.default_rng(seed)
     prompts = load_prompts(csv_path=str(data_dir / "prompts.csv"), limit=prompt_offset + num_prompts)[prompt_offset:]
-    tokenizer = get_tokenizer()
+    tokenizer = _load_tokenizer()
 
     contexts = [(prompt_offset + i + 1, p, load) for i, p in enumerate(prompts) for load in loads]
     rng.shuffle(contexts)
@@ -127,10 +136,10 @@ def run_rl_policy_evaluation(
     summary_path = data_dir / f"rl_policy_summary_{tag}.csv"
     summary.to_csv(summary_path, index=False)
 
-    diffs = pd.concat([
-        paired_differences(df_eval, "condition", baseline=b, group_col="load_workers").query("condition == 'rl_policy'")
-        for b in ["static", "balanced", "latency_optimized"]
-    ], ignore_index=True)
+    diffs = paired_differences(
+        df_eval, "condition", baseline=["static", "balanced", "latency_optimized"],
+        conditions=["rl_policy"], group_col="load_workers"
+    )
     diffs_path = data_dir / f"rl_policy_paired_diffs_{tag}.csv"
     diffs.to_csv(diffs_path, index=False)
 

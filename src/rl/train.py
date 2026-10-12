@@ -1,3 +1,15 @@
+import os
+import sys
+
+_torch_lib = r"C:\Users\Pavithran\AppData\Local\Programs\Python\Python312\Lib\site-packages\torch\lib"
+if os.path.exists(_torch_lib):
+    try:
+        os.add_dll_directory(_torch_lib)
+    except Exception:
+        pass
+    os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
+
+import torch
 import argparse
 from pathlib import Path
 
@@ -78,23 +90,24 @@ def train_dqn(
         avg_loss = float(np.mean(losses)) if losses else 0.0
         action_counts = {a: actions_taken.count(a) for a in env_train.ACTIONS}
 
-        history.append({
+        hist_entry = {
             "episode": episode,
             "total_reward": round(total_reward, 4),
             "avg_loss": round(avg_loss, 6),
             "epsilon": round(agent.epsilon, 4),
-            "static_count": action_counts[0],
-            "balanced_count": action_counts[1],
-            "latency_opt_count": action_counts[2]
-        })
+        }
+        for a in env_train.ACTIONS:
+            hist_entry[f"action_{a}_count"] = action_counts.get(a, 0)
+        history.append(hist_entry)
 
         if episode % 10 == 0 or episode == episodes:
+            action_str = "/".join(str(action_counts.get(a, 0)) for a in env_train.ACTIONS)
             print(
                 f"Episode {episode:03d}/{episodes:03d} | "
                 f"Reward: {total_reward:7.3f} | "
                 f"Loss: {avg_loss:.6f} | "
                 f"Epsilon: {agent.epsilon:.4f} | "
-                f"Actions (0/1/2): {action_counts[0]}/{action_counts[1]}/{action_counts[2]}",
+                f"Actions: {action_str}",
                 flush=True
             )
 

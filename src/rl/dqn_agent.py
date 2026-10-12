@@ -1,10 +1,20 @@
+import os
+import sys
 import random
 from collections import deque
 
-import numpy as np
+_torch_lib = r"C:\Users\Pavithran\AppData\Local\Programs\Python\Python312\Lib\site-packages\torch\lib"
+if os.path.exists(_torch_lib):
+    try:
+        os.add_dll_directory(_torch_lib)
+    except Exception:
+        pass
+    os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 
 
 class DQNNetwork(nn.Module):
@@ -46,6 +56,7 @@ class DQNAgent:
 
         self.state_size = state_size
         self.action_size = action_size
+        self.learning_rate = learning_rate
 
         self.gamma = gamma
         self.epsilon = epsilon
@@ -210,13 +221,17 @@ class DQNAgent:
         print(f"DQN model saved to: {path}")
         
     def load(self, path):
-        self.model.load_state_dict(
-            torch.load(path, map_location=self.device)
-        )
-        self.target_model.load_state_dict(
-            self.model.state_dict()
-        )
-        print(f"DQN model loaded from: {path}")
+        state_dict = torch.load(path, map_location=self.device)
+        if "network.4.weight" in state_dict:
+            ckpt_actions = state_dict["network.4.weight"].shape[0]
+            if ckpt_actions != self.action_size:
+                self.action_size = ckpt_actions
+                self.model = DQNNetwork(self.state_size, self.action_size).to(self.device)
+                self.target_model = DQNNetwork(self.state_size, self.action_size).to(self.device)
+                self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.model.load_state_dict(state_dict)
+        self.target_model.load_state_dict(self.model.state_dict())
+        print(f"DQN model loaded from: {path} (action_size={self.action_size})")
 
 if __name__ == "__main__":
 

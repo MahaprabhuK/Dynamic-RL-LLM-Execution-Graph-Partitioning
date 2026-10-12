@@ -29,39 +29,64 @@ class LLMPartitionEnv:
     features are post-run snapshots and input_tokens is approximated.
     """
 
-    ACTIONS = {
+    DEFAULT_ACTIONS = {
         0: "static",
         1: "balanced",
         2: "latency_optimized"
     }
 
-    def __init__(self, csv_path="data/processed/fixed_strategy_metrics_v3.csv", mode="train", seed=42):
+    def __init__(self, csv_path="data/processed/fixed_strategy_metrics_v3.csv", mode="train", seed=42, actions=None):
         self.mode = mode
         self.seed = seed
         self.df = self._normalize_columns(pd.read_csv(csv_path))
 
-        # Deterministic 70/30 Train/Val Split by Prompt ID (no prompt appears in both)
-        unique_prompts = sorted(self.df["prompt_id"].unique())
-        rng = np.random.default_rng(seed)
-        shuffled_prompts = list(unique_prompts)
-        rng.shuffle(shuffled_prompts)
-
-        n_train = int(len(unique_prompts) * 0.70)
-        self.train_prompts = sorted(shuffled_prompts[:n_train])
-        self.val_prompts = sorted(shuffled_prompts[n_train:])
-
-        if mode == "train":
-            self.active_prompts = self.train_prompts
-        elif mode == "val":
-            self.active_prompts = self.val_prompts
+        if actions is not None:
+            self.ACTIONS = dict(actions)
+        elif "action_id" in self.df.columns and self.df["action_id"].nunique() > 3:
+            unique_actions = sorted(int(a) for a in self.df["action_id"].dropna().unique())
+            self.ACTIONS = {a: str(self.df[self.df["action_id"] == a]["strategy"].iloc[0]) for a in unique_actions}
+        elif "strategy_id" in self.df.columns and self.df["strategy_id"].nunique() > 3:
+            unique_actions = sorted(int(a) for a in self.df["strategy_id"].dropna().unique())
+            self.ACTIONS = {a: str(self.df[self.df["strategy_id"] == a]["strategy"].iloc[0]) for a in unique_actions}
         else:
-            self.active_prompts = unique_prompts
+            self.ACTIONS = dict(self.DEFAULT_ACTIONS)
+
+        # Train/Val Split
+        unique_prompts = sorted(self.df["prompt_id"].unique())
+        if len(unique_prompts) > 1:
+            rng = np.random.default_rng(seed)
+            shuffled_prompts = list(unique_prompts)
+            rng.shuffle(shuffled_prompts)
+            n_train = int(len(unique_prompts) * 0.70)
+            self.train_prompts = sorted(shuffled_prompts[:n_train])
+            self.val_prompts = sorted(shuffled_prompts[n_train:])
+            if mode == "train":
+                self.active_prompts = self.train_prompts
+            elif mode == "val":
+                self.active_prompts = self.val_prompts
+            else:
+                self.active_prompts = unique_prompts
+            active_df = self.df[self.df["prompt_id"].isin(self.active_prompts)]
+        else:
+            # Deterministic split by context_id if all rows share 1 prompt
+            unique_contexts = sorted(self.df["context_id"].unique())
+            n_train = max(1, int(len(unique_contexts) * 0.70))
+            train_ctx = set(unique_contexts[:n_train])
+            val_ctx = set(unique_contexts[n_train:])
+            self.train_prompts = unique_prompts
+            self.val_prompts = unique_prompts
+            if mode == "train":
+                active_df = self.df[self.df["context_id"].isin(train_ctx)]
+            elif mode == "val":
+                active_df = self.df[self.df["context_id"].isin(val_ctx)]
+            else:
+                active_df = self.df
 
         # Group data by context and strategy for paired action outcomes
-        active_df = self.df[self.df["prompt_id"].isin(self.active_prompts)]
         self.paired_contexts = {}
         for c_id, c_df in active_df.groupby("context_id", sort=True):
-            action_map = {int(row["strategy_id"]): row for _, row in c_df.iterrows()}
+            col = "action_id" if "action_id" in c_df.columns else "strategy_id"
+            action_map = {int(row[col]): row for _, row in c_df.iterrows()}
             if set(action_map) == set(self.ACTIONS):
                 self.paired_contexts[c_id] = action_map
 
@@ -132,7 +157,7 @@ class LLMPartitionEnv:
             next_state, reward, done, info
         """
         if action not in self.ACTIONS:
-            raise ValueError(f"Invalid action {action}. Must be 0, 1, or 2.")
+            raise ValueError(f"Invalid action {action}. Must be one of {list(self.ACTIONS)}.")
 
         c_id = self.current_context_id
         measured_row = self.paired_contexts[c_id][action]

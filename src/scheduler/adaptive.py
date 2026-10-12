@@ -13,10 +13,11 @@ Telemetry comes from a shared BackgroundLoadSampler when one is given
 
 import random
 import time
+import math
 
 import numpy as np
 
-from src.llm.partition import PartitionStrategy
+from src.llm.partition import PartitionStrategy, physical_core_count
 from src.rl.features import build_state
 from src.telemetry.monitor import ExternalLoadMonitor, collect_metrics
 
@@ -30,12 +31,16 @@ class AdaptivePolicy:
     """
 
     name = "policy"
+    requires_telemetry = True
 
-    def __init__(self, once: bool = False, initial_interval: float = 0.3, sampler=None, patience: int = 1):
+    def __init__(self, once: bool = False, initial_interval: float = 0.3, sampler=None, patience: int = 1,
+                 emergency_threshold: float | None = None, emergency_action=None):
         self.once = once
         self.initial_interval = initial_interval
         self.sampler = sampler
-        self.patience = max(1, patience)
+        self.patience = max(0, int(patience))
+        self.emergency_threshold = emergency_threshold
+        self.emergency_action = emergency_action
         self.monitor = ExternalLoadMonitor() if sampler is None else None
         self.current = None
         self.last_telemetry = {}
@@ -59,23 +64,71 @@ class AdaptivePolicy:
             self.current, self._proposal, self._streak = None, None, 0
         if self.once and self.current is not None:
             return self.current
-        self.last_telemetry = self.observe(step)
-        proposal = self.choose(self.last_telemetry, prompt, input_tokens)
+        telemetry = self.observe(step)
+        if not self.requires_telemetry:
+            self.last_telemetry = {"telemetry_valid": True}
+            self.current = self.choose(telemetry, prompt, input_tokens)
+            return self.current
 
-        if self.current is None or proposal == self.current:
+        cpu = telemetry.get("external_cpu_percent") if isinstance(telemetry, dict) else None
+        try:
+            cpu = float(cpu)
+            telemetry_valid = math.isfinite(cpu) and 0.0 <= cpu <= 100.0
+        except (TypeError, ValueError):
+            telemetry_valid = False
+        if not telemetry_valid:
+            self.last_telemetry = {**(telemetry if isinstance(telemetry, dict) else {}), "telemetry_valid": False}
+            self._proposal, self._streak = None, 0
+            if self.current is None:
+                self.current = self.safe_action()
+            return self.current
+
+        self.last_telemetry = {**telemetry, "telemetry_valid": True}
+        proposal = self.choose(telemetry, prompt, input_tokens)
+        emergency = self.emergency_threshold is not None and cpu >= self.emergency_threshold
+        if emergency and self.emergency_action is not None:
+            proposal = self.emergency_action
+            if isinstance(proposal, PartitionStrategy) and proposal.thread_budget is not None:
+                self.last_telemetry["selected_thread_budget"] = proposal.thread_budget
+        self.last_telemetry["emergency_switch"] = bool(emergency)
+
+        if self.current is None or self._action_key(proposal) == self._action_key(self.current):
+            self.current, self._proposal, self._streak = proposal, None, 0
+        elif emergency or self.patience <= 1:
             self.current, self._proposal, self._streak = proposal, None, 0
         else:
-            self._streak = self._streak + 1 if proposal == self._proposal else 1
+            self._streak = self._streak + 1 if self._action_key(proposal) == self._action_key(self._proposal) else 1
             self._proposal = proposal
             if self._streak >= self.patience:
                 self.current, self._proposal, self._streak = proposal, None, 0
         return self.current
+
+    @staticmethod
+    def _action_key(action):
+        if isinstance(action, PartitionStrategy):
+            return action.strategy_id, tuple(action.get_thread_counts())
+        return action
+
+    def on_emergency_switch(self, conservative_action=1):
+        """Called when an emergency switch bypasses normal interval and hysteresis."""
+        self.current = conservative_action
+        self._streak = 0
+        self._candidate = None
+
+    def on_token(self, step, token_seconds):
+        """Optional per-token callback for policies tracking token timing."""
+        pass
+
+    def safe_action(self):
+        return 0
 
     def choose(self, telemetry, prompt, input_tokens):
         raise NotImplementedError
 
 
 class FixedPolicy(AdaptivePolicy):
+    requires_telemetry = False
+
     def __init__(self, strategy_id):
         super().__init__(once=True)
         self.strategy_id = strategy_id
@@ -95,8 +148,10 @@ class ThresholdPolicy(AdaptivePolicy):
     """
 
     def __init__(self, threshold: float = 40.0, low_load_action: int = 0, high_load_action: int = 1, once=False,
-                 sampler=None, patience=1):
-        super().__init__(once=once, sampler=sampler, patience=patience)
+                 sampler=None, patience=1, emergency_threshold: float | None = None,
+                 emergency_action: int | None = None):
+        super().__init__(once=once, sampler=sampler, patience=patience,
+                         emergency_threshold=emergency_threshold, emergency_action=emergency_action)
         self.threshold = threshold
         self.low_load_action = low_load_action
         self.high_load_action = high_load_action
@@ -105,11 +160,79 @@ class ThresholdPolicy(AdaptivePolicy):
         return self.high_load_action if telemetry["external_cpu_percent"] > self.threshold else self.low_load_action
 
 
+class CoresHeuristicPolicy(AdaptivePolicy):
+    """
+    Selects thread budget using estimated spare CPU cores.
+    threads = clamp(logical_cores - estimated_busy_cores, 1, 10), where
+    estimated_busy_cores = external_cpu% * 16 / 100.
+    Re-decides every 10 tokens.
+    """
+
+    def __init__(self, sampler=None, logical_cores: int = 16, thread_budgets=PartitionStrategy.THREAD_BUDGETS, patience=1,
+                 emergency_threshold: float | None = None, emergency_action: int = 1):
+        budgets = tuple(sorted(set(int(value) for value in thread_budgets)))
+        self.thread_budgets = budgets
+        self.logical_cores = logical_cores
+        super().__init__(sampler=sampler, patience=patience, emergency_threshold=emergency_threshold,
+                         emergency_action=emergency_action)
+
+    def choose(self, telemetry, prompt, input_tokens):
+        ext_cpu = telemetry.get("external_cpu_percent", 0.0)
+        estimated_busy = ext_cpu * self.logical_cores / 100.0
+        target_threads = int(np.clip(round(self.logical_cores - estimated_busy), 1, 10))
+        
+        # Map target_threads to strategies
+        # 10 threads -> static (0)
+        # 6 threads -> latency_optimized (2)
+        # <=4 threads -> balanced (1)
+        if set(self.thread_budgets) == {3, 6, 10} or set(self.thread_budgets) == {2, 4, 6, 8, 10, 12}:
+            if target_threads >= 9:
+                action = 0  # static (10 threads)
+            elif target_threads >= 5:
+                action = 2  # latency_optimized (6 threads)
+            else:
+                action = 1  # balanced (3 threads)
+        else:
+            eligible = [b for b in self.thread_budgets if b <= target_threads]
+            chosen_budget = max(eligible) if eligible else min(self.thread_budgets)
+            if chosen_budget >= 10:
+                action = 0
+            elif chosen_budget >= 6:
+                action = 2
+            else:
+                action = 1
+
+        eligible = [b for b in self.thread_budgets if b <= target_threads]
+        chosen_budget = max(eligible) if eligible else min(self.thread_budgets)
+        self.last_telemetry.update({
+            "target_threads": target_threads,
+            "estimated_busy_cores": round(estimated_busy, 2),
+            "cores_heuristic_action": action,
+            "selected_thread_budget": chosen_budget
+        })
+        return PartitionStrategy(2, thread_budget=chosen_budget)
+
+    def on_emergency_switch(self, conservative_action=1):
+        """Called when an emergency switch bypasses normal interval and hysteresis."""
+        self.current = conservative_action
+        self._streak = 0
+        self._candidate = None
+
+    def on_token(self, step, token_seconds):
+        """Optional per-token callback for policies tracking token timing."""
+        pass
+
+    def safe_action(self):
+        return 1
+
+
 class RLPolicy(AdaptivePolicy):
     """Trained DQN agent, fed the same 4D state it was trained on."""
 
-    def __init__(self, agent, once=False, sampler=None, patience=1):
-        super().__init__(once=once, sampler=sampler, patience=patience)
+    def __init__(self, agent, once=False, sampler=None, patience=1, emergency_threshold: float | None = None,
+                 emergency_action: int | None = None):
+        super().__init__(once=once, sampler=sampler, patience=patience,
+                         emergency_threshold=emergency_threshold, emergency_action=emergency_action)
         self.agent = agent
         self.agent.epsilon = 0.0
 
@@ -120,7 +243,11 @@ class RLPolicy(AdaptivePolicy):
             cpu_percent=telemetry["external_cpu_percent"],
             ram_percent=telemetry["ram_percent"]
         )
-        return self.agent.choose_action(state)
+        action = self.agent.choose_action(state)
+        if getattr(self.agent, "action_size", 3) == 6:
+            budget = {0: 2, 1: 4, 2: 6, 3: 8, 4: 10, 5: 12}.get(action, 10)
+            return PartitionStrategy("static", thread_budget=budget)
+        return action
 
 
 class OnlineBanditPolicy(AdaptivePolicy):
@@ -158,8 +285,9 @@ class OnlineBanditPolicy(AdaptivePolicy):
 
     def __init__(self, prior_agent=None, edges=(35.0,), discount=0.98, prior_weight=2.0, bonus=0.08,
                  sec_per_token_ref=0.5, sampler=None, seed=0, outlier_ratio=2.0, regime_after=5,
-                 bin_margin=8.0):
-        super().__init__(once=False, sampler=sampler)
+                 bin_margin=8.0, emergency_threshold: float | None = None, emergency_action: int = 1):
+        super().__init__(once=False, sampler=sampler, emergency_threshold=emergency_threshold,
+                         emergency_action=emergency_action)
         self.prior_agent = prior_agent
         if prior_agent is not None:
             prior_agent.epsilon = 0.0
@@ -178,6 +306,7 @@ class OnlineBanditPolicy(AdaptivePolicy):
         self.rng = random.Random(seed)
         self._pending = None
         self._bin = None
+        self.emergency_action = emergency_action
         self._rejected = {}
         self.history = []
 
@@ -196,17 +325,35 @@ class OnlineBanditPolicy(AdaptivePolicy):
         if not established.any():
             return False
         reference = np.nanmin(self.estimates(b)[established])
-        return sec_per_token > self.outlier_ratio * reference
+        return bool(sec_per_token > self.outlier_ratio * reference)
 
     def _ensure_bin(self, b, prompt, input_tokens, telemetry):
         if b in self.sums:
             return
         n = len(self.actions)
         self.sums[b], self.weights[b], self.counts[b] = np.zeros(n), np.zeros(n), np.zeros(n)
-        if self.prior_agent is not None:
+        ext_cpu = telemetry.get("external_cpu_percent", 0.0)
+        # P1.3: Limit DQN warm start to training range (<=8 workers, ~75% CPU). Flat prior elsewhere.
+        if self.prior_agent is not None and ext_cpu <= 75.0:
             state = build_state(prompt_length=len(prompt), input_tokens=input_tokens,
-                                cpu_percent=telemetry["external_cpu_percent"], ram_percent=telemetry["ram_percent"])
-            prior = np.maximum(-self.prior_agent.q_values(state) * self.sec_per_token_ref, 1e-3)
+                                cpu_percent=ext_cpu, ram_percent=telemetry["ram_percent"])
+            q_vals = self.prior_agent.q_values(state)
+            if len(q_vals) == n:
+                prior = np.maximum(-q_vals * self.sec_per_token_ref, 1e-3)
+            elif len(q_vals) == 6 and n == 3:
+                # Map 6 single-stage thread budgets to the 3 named aliases:
+                # 0: static (10 threads -> arm 4)
+                # 1: balanced (3+3 threads -> arm 2)
+                # 2: latency_optimized (6 threads -> arm 2)
+                q_mapped = np.array([q_vals[4], q_vals[2], q_vals[2]], dtype=np.float32)
+                prior = np.maximum(-q_mapped * self.sec_per_token_ref, 1e-3)
+            else:
+                prior = np.full(n, float(self.sec_per_token_ref))
+            self.sums[b] = prior * self.prior_weight
+            self.weights[b] = np.full(n, float(self.prior_weight))
+        elif self.prior_agent is not None:
+            # Flat prior outside training range
+            prior = np.full(n, float(self.sec_per_token_ref))
             self.sums[b] = prior * self.prior_weight
             self.weights[b] = np.full(n, float(self.prior_weight))
 
@@ -224,22 +371,57 @@ class OnlineBanditPolicy(AdaptivePolicy):
 
     def select(self, b):
         w = self.weights[b]
-        untried = [a for a, wi in zip(self.actions, w) if wi <= 1e-9]
+        est = self.estimates(b)
+        
+        # P1.3 Exploration pruning:
+        # 1. Never explore static (action 0, 10 threads) in the top bin (high load).
+        is_top_bin = (b >= len(self.edges) and (len(self.edges) >= 2 or self.edges[-1] >= 60.0))
+        candidates = [a for a in self.actions if not (is_top_bin and a == 0)]
+        if not candidates:
+            candidates = list(self.actions)
+
+        # 2. Never explore an arm whose current estimate is > 2x the best arm in this bin.
+        valid_ests = [est[self.actions.index(a)] for a in candidates if not np.isnan(est[self.actions.index(a)])]
+        if valid_ests:
+            min_est = min(valid_ests)
+            pruned = [a for a in candidates if np.isnan(est[self.actions.index(a)]) or est[self.actions.index(a)] <= 2.0 * min_est]
+            if pruned:
+                candidates = pruned
+
+        untried = [a for a in candidates if w[self.actions.index(a)] <= 1e-9]
         if untried:
             return self.rng.choice(untried)
+
         # Lower cost is better: optimism shrinks the estimate of rarely tried arms
-        score = self.estimates(b) * (1.0 - self.bonus / np.sqrt(w))
-        best = np.flatnonzero(score <= score.min() + 1e-12)
-        return self.actions[int(self.rng.choice(list(best)))]
+        scores = {a: est[self.actions.index(a)] * (1.0 - self.bonus / np.sqrt(w[self.actions.index(a)])) for a in candidates}
+        min_score = min(scores.values())
+        best = [a for a, s in scores.items() if s <= min_score + 1e-12]
+        return self.rng.choice(best)
+
+    def on_token(self, step, token_seconds):
+        if not hasattr(self, "_segment_token_latencies"):
+            self._segment_token_latencies = []
+        self._segment_token_latencies.append(token_seconds)
 
     def decide(self, step, prompt, input_tokens):
         now = time.perf_counter()
         if step == 0:
             self._pending, self._bin = None, None
+            self._segment_token_latencies = []
+            self._switched_at_start = False
         elif self._pending is not None:
-            b, action, t0, s0 = self._pending
+            b, action, t0, s0, was_switched = self._pending
             if s0 > 0 and step > s0:
-                spt = (now - t0) / (step - s0)
+                # P1.3 Cost attribution: drop the first 2 tokens after a switch from the segment cost
+                latencies = getattr(self, "_segment_token_latencies", [])
+                if was_switched and len(latencies) > 2:
+                    spt = float(np.mean(latencies[2:]))
+                elif latencies:
+                    spt = float(np.mean(latencies))
+                else:
+                    spt = (now - t0) / (step - s0)
+                self._segment_token_latencies = []
+
                 outlier = self.is_outlier(b, spt)
                 self._rejected[b] = self._rejected.get(b, 0) + 1 if outlier else 0
                 accepted = not outlier or self._rejected[b] >= self.regime_after
@@ -254,13 +436,17 @@ class OnlineBanditPolicy(AdaptivePolicy):
         telemetry = self.observe(step)
         b = self._bin = self.context_bin(telemetry)
         self._ensure_bin(b, prompt, input_tokens, telemetry)
-        action = self.select(b)
+        emergency = (self.emergency_threshold is not None and
+                 telemetry["external_cpu_percent"] >= self.emergency_threshold)
+        action = self.emergency_action if emergency else self.select(b)
 
         est = self.estimates(b)
         self.last_telemetry = {**telemetry, "context_bin": b,
+                       "telemetry_valid": True, "emergency_switch": bool(emergency),
                                **{f"est_spt_{a}": round(float(e), 4) for a, e in zip(self.actions, est)}}
         self.current = action
-        self._pending = (b, action, time.perf_counter(), step)
+        was_switched = bool(self.current is not None and action != self.current)
+        self._pending = (b, action, time.perf_counter(), step, was_switched)
         return action
 
     def choose(self, telemetry, prompt, input_tokens):
