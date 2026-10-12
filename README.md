@@ -165,6 +165,29 @@ The v4 diagnostics also changed the bandit:
 - The stall exclusion compares each run with the same condition in the same
   scenario, so a policy that is slow every time (oversubscription) is kept.
 
+### v5 results (8 prompts x 5 scenarios, 200 tokens, paired)
+
+Four contexts with paging stalls were excluded (36 left). Generated tokens were
+identical across all conditions in 100% of contexts; decision overhead 0.005 s
+per request. Full write-up: `docs/report/Project_Report.pdf`.
+
+- Re-deciding pays off when load crosses the oversubscription cliff. In `ramp`,
+  `rl_adaptive` took 54.9 s against 389.5 s for `rl_once` (-85.7%, paired CI
+  -430 to -266 s), and was 7.7% faster than the best fixed strategy
+  (`balanced`). In `relief`, `rl_adaptive` and `rule_adaptive` beat every fixed
+  strategy by about 9-10%.
+- In `spike` all adaptive policies were about 58% slower than fixed `balanced`:
+  they run `static` while idle and need 10-15 tokens at ~2.5 s/token to switch
+  after 10 workers arrive (decision interval plus hysteresis).
+- The online bandit was the weakest adaptive policy in v5 (+57% vs `balanced`
+  in `spike`, +34% vs `rl_adaptive` in `ramp`). In the high-load bin it chose
+  `latency_optimized` (median 0.234 s/token) 267 times and `balanced` (0.132
+  s/token) 104 times. Its regret fell from 12.9 s to 7.9 s between the two
+  halves of the run, but stayed above `rl_adaptive`.
+
+Re-analyse with `python evaluate_adaptive.py --tag v5 --report-only`.
+`run_overnight.cmd` resumes the v5 run unattended (`--resume --keep-awake`).
+
 Results from the earlier v3 adaptive run (60-token requests, time-triggered
 load, blocking telemetry) are kept as `adaptive_*_v3.*`.
 

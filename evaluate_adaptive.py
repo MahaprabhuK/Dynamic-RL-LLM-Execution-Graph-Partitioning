@@ -333,7 +333,13 @@ if __name__ == "__main__":
     parser.add_argument("--ramp", default="", help="Extra 'ramp' scenario from idle, e.g. '60:8,140:12' (token:workers).")
     parser.add_argument("--bandit-edges", default="35", help="External CPU %% bin edges of the online bandit.")
     parser.add_argument("--bin-margin", type=float, default=8.0, help="Bandit bin hysteresis in CPU %% points.")
+    parser.add_argument("--keep-awake", action="store_true", help="Stop Windows from sleeping while this runs.")
     args = parser.parse_args()
+
+    if args.keep_awake and sys.platform == "win32":
+        import ctypes
+        # ES_CONTINUOUS | ES_SYSTEM_REQUIRED: released automatically when the process exits
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
 
     if args.report_only:
         data_dir = ROOT_DIR / "data" / "processed"
