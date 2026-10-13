@@ -56,3 +56,14 @@
 - Best arm by workers: 0 threads_6, 4 threads_10, 8/9 threads_6, 10/11 threads_4, 12 balanced,
   14 threads_2. Summary at the end of data/processed/load_sweep_v7.log.
 - CoresHeuristicPolicy rewritten for v7 arms (snap to nearest arm, ties to fewer threads); 91 tests pass.
+
+## Stage 4: rule_lookup (2026-10-13 ~11:35)
+- experiments/e3_rule.yaml: 4 bins (edges 63.8 / 75.09 / 83.77 % ext CPU) -> threads_6 / threads_4 /
+  balanced / threads_2. Offline: zero regret except workers 4 (0.009 s/tok); cores_heuristic 0.01-0.02.
+
+## Stage 5: reaction-delay pilot (2026-10-13 12:31)
+- 78/84 done when Claude Code killed the background job for low system memory; resumed with --resume.
+  Last 6 runs carry commit 60beb1a (only removed test_bfloat16.py / run_overnight.cmd; no code change).
+- 0 skipped, 25 paging-flagged runs. Frozen: rule_i10_p1_off (interval 10, patience 1, no latency
+  switch), experiments/e2_frozen.yaml. n=3 per cell; 4 configs within 2 % of the best total.
+- All rule configs beat fixed balanced in spike by 3.7-6.9 %.

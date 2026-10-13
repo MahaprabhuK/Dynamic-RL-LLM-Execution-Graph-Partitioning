@@ -1,0 +1,53 @@
+Reaction-delay pilot summary (experiments/analyze_e2.py), source: data/processed/v7runs_pilot_v7.csv
+runs completed: 84 of 84; skipped (RAM guard): 0; paging-flagged runs: 25
+commit hashes: ['100063d127e9403f3b95786bfe1fbfe71b1b9362', '60beb1a7a0f1f2436e2c9009901c7ae96f7f39ce']
+
+Per config and scenario:
+      condition scenario  n  mean_latency_s  switches_per_request  emergency_triggers_per_request  spike_gap_vs_balanced_s  spike_gap_vs_balanced_percent
+       balanced     ramp  3          22.469                 0.000                           0.000                    0.000                          0.000
+       balanced    spike  3          21.873                 0.000                           0.000                    0.000                          0.000
+rule_i10_p0_em3     ramp  3          22.202                 3.000                           0.667                   -1.099                         -5.024
+rule_i10_p0_em3    spike  3          20.774                 3.667                           0.000                   -1.099                         -5.024
+rule_i10_p0_off     ramp  3          23.500                 3.000                           0.000                   -1.500                         -6.860
+rule_i10_p0_off    spike  3          20.372                 3.333                           0.000                   -1.500                         -6.860
+rule_i10_p1_em3     ramp  3          25.699                 4.333                           2.000                   -1.341                         -6.131
+rule_i10_p1_em3    spike  3          20.532                 2.333                           0.000                   -1.341                         -6.131
+rule_i10_p1_off     ramp  3          21.860                 1.667                           0.000                   -1.497                         -6.846
+rule_i10_p1_off    spike  3          20.375                 3.667                           0.000                   -1.497                         -6.846
+rule_i10_p2_em3     ramp  3          22.357                 1.000                           1.000                   -0.825                         -3.770
+rule_i10_p2_em3    spike  3          21.048                 1.000                           0.000                   -0.825                         -3.770
+rule_i10_p2_off     ramp  3          22.684                 1.000                           0.000                   -0.959                         -4.383
+rule_i10_p2_off    spike  3          20.914                 2.333                           0.000                   -0.959                         -4.383
+ rule_i5_p0_em3     ramp  3          22.353                 3.667                           1.000                   -0.805                         -3.679
+ rule_i5_p0_em3    spike  3          21.068                 9.000                           0.333                   -0.805                         -3.679
+ rule_i5_p0_off     ramp  3          22.150                 2.667                           0.000                   -1.345                         -6.151
+ rule_i5_p0_off    spike  3          20.527                 6.000                           0.000                   -1.345                         -6.151
+ rule_i5_p1_em3     ramp  3          22.078                 2.000                           0.333                   -1.261                         -5.766
+ rule_i5_p1_em3    spike  3          20.611                 8.000                           0.000                   -1.261                         -5.766
+ rule_i5_p1_off     ramp  3          22.285                 4.000                           0.000                   -0.941                         -4.301
+ rule_i5_p1_off    spike  3          20.932                 5.667                           0.000                   -0.941                         -4.301
+ rule_i5_p2_em3     ramp  3          22.770                 3.000                           1.667                   -1.276                         -5.834
+ rule_i5_p2_em3    spike  3          20.597                 1.667                           0.000                   -1.276                         -5.834
+ rule_i5_p2_off     ramp  3          24.294                 2.667                           0.000                   -1.313                         -6.004
+ rule_i5_p2_off    spike  3          20.560                 2.333                           0.000                   -1.313                         -6.004
+      threads_2     ramp  3          23.500                 0.000                           0.000                    1.275                          5.830
+      threads_2    spike  3          23.148                 0.000                           0.000                    1.275                          5.830
+
+Freeze: total mean latency spike + ramp (s) and switches per request, rule_lookup configs:
+                 total_s  switches_per_request
+condition                                     
+rule_i10_p1_off   42.235                 2.667
+rule_i5_p0_off    42.678                 4.333
+rule_i5_p1_em3    42.689                 5.000
+rule_i10_p0_em3   42.976                 3.333
+rule_i5_p1_off    43.217                 4.833
+rule_i5_p2_em3    43.367                 2.333
+rule_i10_p2_em3   43.405                 1.000
+rule_i5_p0_em3    43.421                 6.333
+rule_i10_p2_off   43.598                 1.667
+rule_i10_p0_off   43.872                 3.167
+rule_i5_p2_off    44.853                 2.500
+rule_i10_p1_em3   46.230                 3.333
+
+configs within 2% of the best total: ['rule_i10_p0_em3', 'rule_i10_p1_off', 'rule_i5_p0_off', 'rule_i5_p1_em3']
+FROZEN: rule_i10_p1_off -> interval 10, patience 1, latency switch None (experiments/e2_frozen.yaml)

@@ -1,0 +1,24 @@
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  13%|#3        | 27/201 [00:00<00:00, 265.36it/s]Loading weights:  32%|###2      | 65/201 [00:00<00:00, 329.31it/s]Loading weights:  52%|#####2    | 105/201 [00:00<00:00, 359.73it/s]Loading weights:  72%|#######2  | 145/201 [00:00<00:00, 363.79it/s]Loading weights:  95%|#########4| 190/201 [00:00<00:00, 388.99it/s]Loading weights: 100%|##########| 201/201 [00:00<00:00, 367.92it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=pilot_v7 plan=e2_plan.yaml commit=100063d127
+6 contexts x 14 conditions = 84 runs; 0 already done; 200 tokens
+================================================================================
+[ctx 001/6] prompt 4 ramp        : rule_i5_p0_em3=21.9 balanced=23.3 rule_i5_p0_off=23.2 rule_i10_p2_off=24.4 threads_2=23.9 rule_i5_p2_off=26.4 rule_i10_p1_off=22.5 rule_i10_p0_off=24.6 rule_i10_p0_em3=22.2 rule_i5_p1_off=23.1 rule_i5_p2_em3=24.0 rule_i10_p1_em3=34.2 rule_i10_p2_em3=20.6 rule_i5_p1_em3=20.7 | 70 runs left, ETA 0.5 h
+[ctx 002/6] prompt 4 spike       : rule_i5_p2_em3=20.5 rule_i10_p1_em3=20.4 rule_i10_p1_off=20.2 rule_i5_p1_off=20.6 threads_2=22.9 balanced=21.1 rule_i5_p0_off=20.4 rule_i5_p0_em3=20.5 rule_i10_p0_em3=20.4 rule_i5_p2_off=20.2 rule_i10_p2_em3=20.5 rule_i10_p0_off=20.6 rule_i10_p2_off=20.4 rule_i5_p1_em3=20.7 | 56 runs left, ETA 0.4 h
+[ctx 003/6] prompt 5 ramp        : rule_i5_p2_off=21.0 balanced=21.6 rule_i10_p0_em3=22.4 rule_i5_p1_em3=22.0 rule_i5_p1_off=22.3 rule_i10_p2_em3=21.8 threads_2=23.8 rule_i10_p1_off=21.6 rule_i10_p0_off=21.7 rule_i10_p2_off=22.6 rule_i10_p1_em3=22.2 rule_i5_p0_em3=22.1 rule_i5_p2_em3=22.7 rule_i5_p0_off=22.0 | 42 runs left, ETA 0.3 h
+[ctx 004/6] prompt 5 spike       : balanced=22.1 rule_i5_p2_off=20.6 rule_i10_p1_off=20.3 rule_i5_p1_em3=20.7 rule_i10_p0_off=20.3 rule_i5_p0_off=21.0 rule_i10_p2_off=21.3 rule_i5_p2_em3=21.0 rule_i10_p1_em3=21.0 rule_i5_p0_em3=21.2 threads_2=23.6 rule_i10_p2_em3=21.6 rule_i5_p1_off=21.2 rule_i10_p0_em3=21.6 | 28 runs left, ETA 0.2 h
+[ctx 005/6] prompt 6 spike       : rule_i5_p0_em3=21.5 rule_i10_p2_em3=21.1 balanced=22.5 rule_i10_p0_em3=20.3 rule_i5_p1_off=21.0 rule_i10_p1_em3=20.2 rule_i5_p1_em3=20.4 rule_i10_p1_off=20.5 rule_i5_p2_em3=20.3 rule_i10_p0_off=20.3 rule_i5_p0_off=20.2 threads_2=23.0 rule_i10_p2_off=21.0 rule_i5_p2_off=20.8 | 14 runs left, ETA 0.1 h
+[ctx 006/6] prompt 6 ramp        : rule_i5_p2_em3=21.7 rule_i10_p0_em3=22.0 rule_i10_p1_em3=20.8 threads_2=22.8 balanced=22.5 rule_i10_p1_off=21.5 rule_i10_p2_off=21.1 rule_i5_p0_off=21.3C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\src\telemetry\monitor.py:91: SyntaxWarning: invalid escape sequence '\P'
+  "Memory\Pages Input/sec" raw counter; -1 when unavailable) and the current
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  16%|#5        | 32/201 [00:00<00:00, 314.33it/s]Loading weights:  32%|###1      | 64/201 [00:00<00:00, 238.57it/s]Loading weights:  44%|####4     | 89/201 [00:00<00:00, 242.59it/s]Loading weights:  57%|#####6    | 114/201 [00:00<00:00, 197.80it/s]Loading weights:  67%|######7   | 135/201 [00:00<00:00, 187.60it/s]Loading weights:  77%|#######7  | 155/201 [00:00<00:00, 157.51it/s]Loading weights:  86%|########5 | 172/201 [00:00<00:00, 148.83it/s]Loading weights:  94%|#########3| 188/201 [00:01<00:00, 59.96it/s] Loading weights: 100%|##########| 201/201 [00:01<00:00, 119.58it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=pilot_v7 plan=e2_plan.yaml commit=60beb1a7a0
+6 contexts x 14 conditions = 84 runs; 78 already done; 200 tokens
+================================================================================
+[ctx 006/6] prompt 6 ramp        : rule_i5_p1_off=21.5 rule_i5_p0_em3=23.0 rule_i10_p2_em3=24.7 rule_i5_p2_off=25.4  RAM 86.1% > 85.0%: waiting 30 s (retry 1/10)
+ rule_i5_p1_em3=23.5 rule_i10_p0_off=24.2 | 0 runs left, ETA 0.0 h
+Finished: 84 runs in v7runs_pilot_v7.csv at 12:31:28
