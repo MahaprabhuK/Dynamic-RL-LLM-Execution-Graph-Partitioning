@@ -21,7 +21,7 @@ from src.data.load_prompts import load_prompts
 from src.llm.inference import generate_partitioned_response
 from src.telemetry.run_guard import run_metadata
 
-OUT = ROOT_DIR / "experiments" / "f3_paging_check.txt"
+OUT = ROOT_DIR / "experiments" / (sys.argv[1] if len(sys.argv) > 1 else "f3_paging_check.txt")
 PROMPT = load_prompts(csv_path=str(ROOT_DIR / "data" / "processed" / "prompts.csv"), limit=1)[0]
 
 
@@ -36,6 +36,8 @@ def one_run(label):
 
 
 def main():
+    if OUT.exists():
+        raise SystemExit(f"{OUT} exists; pass a new file name (results are never overwritten)")
     generate_partitioned_response(PROMPT, strategy="balanced", max_new_tokens=8)  # load + warm-up
     meta_before = run_metadata()
     normal, normal_s = one_run("normal")

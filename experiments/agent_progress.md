@@ -28,3 +28,9 @@
 1. F3 paging check did not show a rise (rule: stop and tell the user).
 2. RAM is ~94 % once the model is loaded (v5 runs: median 96 %). The F4 guard (85 %) would skip every
    run, and each skip waits 10 x 30 s, so Stages 2-9 cannot produce data on this machine state.
+
+## Resume 2026-10-13 07:57 (browsers closed by user)
+- RAM with model loaded: 82.0 % (under the 85 % guard).
+- F3 rerun -> experiments/f3_paging_check_run2.txt (first run kept unchanged). Helper reached
+  818 MB available, but the process page-fault delta still did not rise (ratio in the file).
+  Windows trims other processes, not the model's actively used pages. F3 still FAILED; stopped again.
