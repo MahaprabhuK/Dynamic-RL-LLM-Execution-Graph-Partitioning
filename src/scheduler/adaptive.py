@@ -165,68 +165,80 @@ class ThresholdPolicy(AdaptivePolicy):
 
 class CoresHeuristicPolicy(AdaptivePolicy):
     """
-    Selects thread budget using estimated spare CPU cores.
-    threads = clamp(logical_cores - estimated_busy_cores, 1, 10), where
-    estimated_busy_cores = external_cpu% * 16 / 100.
-    Re-decides every 10 tokens.
+    Spare-cores heuristic on the v7 single-stage arms (not fitted to data):
+
+        threads = clamp(10 - round(external_cpu% * 16 / 100), 2, 10)
+
+    (10 physical cores; external_cpu% of the 16 logical CPUs are busy), snapped to
+    the nearest available arm in `arms`. A tie (equal distance to two arms) goes
+    to the smaller thread count, the safer choice under load.
     """
 
-    def __init__(self, sampler=None, logical_cores: int = 16, thread_budgets=PartitionStrategy.THREAD_BUDGETS, patience=1,
-                 emergency_cpu: float | None = None, emergency_action: int = 1):
-        budgets = tuple(sorted(set(int(value) for value in thread_budgets)))
-        self.thread_budgets = budgets
+    def __init__(self, sampler=None, arms=(2, 3, 4, 6, 10), physical_cores: int = 10, logical_cores: int = 16,
+                 min_threads: int = 2, max_threads: int = 10, patience=1, emergency_cpu: float | None = None,
+                 emergency_action="balanced"):
+        self.arms = tuple(sorted(int(str(a).replace("threads_", "")) for a in arms))
+        self.physical_cores = physical_cores
         self.logical_cores = logical_cores
+        self.min_threads, self.max_threads = min_threads, max_threads
         super().__init__(sampler=sampler, patience=patience, emergency_cpu=emergency_cpu,
                          emergency_action=emergency_action)
 
+    def target_threads(self, external_cpu):
+        busy = round(external_cpu * self.logical_cores / 100.0)
+        return int(np.clip(self.physical_cores - busy, self.min_threads, self.max_threads))
+
+    def snap(self, threads):
+        return min(self.arms, key=lambda a: (abs(a - threads), a))
+
     def choose(self, telemetry, prompt, input_tokens):
-        ext_cpu = telemetry.get("external_cpu_percent", 0.0)
-        estimated_busy = ext_cpu * self.logical_cores / 100.0
-        target_threads = int(np.clip(round(self.logical_cores - estimated_busy), 1, 10))
-        
-        # Map target_threads to strategies
-        # 10 threads -> static (0)
-        # 6 threads -> latency_optimized (2)
-        # <=4 threads -> balanced (1)
-        if set(self.thread_budgets) == {3, 6, 10} or set(self.thread_budgets) == {2, 4, 6, 8, 10, 12}:
-            if target_threads >= 9:
-                action = 0  # static (10 threads)
-            elif target_threads >= 5:
-                action = 2  # latency_optimized (6 threads)
-            else:
-                action = 1  # balanced (3 threads)
-        else:
-            eligible = [b for b in self.thread_budgets if b <= target_threads]
-            chosen_budget = max(eligible) if eligible else min(self.thread_budgets)
-            if chosen_budget >= 10:
-                action = 0
-            elif chosen_budget >= 6:
-                action = 2
-            else:
-                action = 1
-
-        eligible = [b for b in self.thread_budgets if b <= target_threads]
-        chosen_budget = max(eligible) if eligible else min(self.thread_budgets)
-        self.last_telemetry.update({
-            "target_threads": target_threads,
-            "estimated_busy_cores": round(estimated_busy, 2),
-            "cores_heuristic_action": action,
-            "selected_thread_budget": chosen_budget
-        })
-        return PartitionStrategy(2, thread_budget=chosen_budget)
-
-    def on_emergency_switch(self, conservative_action=1):
-        """Called when an emergency switch bypasses normal interval and hysteresis."""
-        self.current = conservative_action
-        self._streak = 0
-        self._candidate = None
-
-    def on_token(self, step, token_seconds):
-        """Optional per-token callback for policies tracking token timing."""
-        pass
+        ext_cpu = float(telemetry.get("external_cpu_percent", 0.0))
+        target = self.target_threads(ext_cpu)
+        chosen = self.snap(target)
+        self.last_telemetry.update({"target_threads": target, "selected_thread_budget": chosen})
+        return f"threads_{chosen}"
 
     def safe_action(self):
-        return 1
+        return "balanced"
+
+
+class LookupRulePolicy(AdaptivePolicy):
+    """
+    Non-learned lookup rule built from the v7 load sweep (Stage 4,
+    experiments/e3_rule.yaml): external CPU % bins -> the arm with the lowest
+    median s/token in that bin. Bin i covers edges[i-1] < cpu <= edges[i].
+    Hysteresis via `patience` (base class).
+    """
+
+    def __init__(self, edges, arms, sampler=None, patience=2, emergency_cpu: float | None = None,
+                 emergency_action=None):
+        edges, arms = [float(e) for e in edges], [str(a) for a in arms]
+        if len(arms) != len(edges) + 1:
+            raise ValueError("need exactly one arm per bin (len(arms) == len(edges) + 1)")
+        if edges != sorted(edges):
+            raise ValueError("bin edges must be increasing")
+        self.edges, self.arms = edges, arms
+        super().__init__(sampler=sampler, patience=patience, emergency_cpu=emergency_cpu,
+                         emergency_action=emergency_action)
+
+    @classmethod
+    def from_file(cls, path, **kwargs):
+        import yaml
+
+        with open(path, "r", encoding="utf-8") as f:
+            rule = yaml.safe_load(f)
+        return cls(rule["edges"], rule["arms"], **kwargs)
+
+    def bin_of(self, cpu):
+        return int(np.searchsorted(self.edges, cpu, side="left"))
+
+    def choose(self, telemetry, prompt, input_tokens):
+        b = self.bin_of(float(telemetry["external_cpu_percent"]))
+        self.last_telemetry["rule_bin"] = b
+        return self.arms[b]
+
+    def safe_action(self):
+        return "balanced"
 
 
 class RLPolicy(AdaptivePolicy):
@@ -447,8 +459,9 @@ class OnlineBanditPolicy(AdaptivePolicy):
         self.last_telemetry = {**telemetry, "context_bin": b,
                        "telemetry_valid": True, "emergency_switch": bool(emergency),
                                **{f"est_spt_{a}": round(float(e), 4) for a, e in zip(self.actions, est)}}
+        # Compare with the previous arm before overwriting it (P1.3 switch-token attribution)
+        was_switched = bool(step > 0 and self.current is not None and action != self.current)
         self.current = action
-        was_switched = bool(self.current is not None and action != self.current)
         self._pending = (b, action, time.perf_counter(), step, was_switched)
         return action
 
@@ -467,3 +480,103 @@ class OnlineBanditPolicy(AdaptivePolicy):
         self.counts = {int(b): np.array(v) for b, v in state.get("counts", {}).items()} or \
             {b: np.zeros(len(self.actions)) for b in self.sums}
         self.history = list(state.get("history", []))
+
+
+# ---------------------------------------------------------------------------
+# v7 learned policies (Stage 6)
+# ---------------------------------------------------------------------------
+
+V7_STATE_SCALE = (100.0, 16384.0, 100.0)  # external CPU %, available RAM MB, prompt tokens
+
+
+def v7_state(external_cpu, available_mb, prompt_tokens):
+    """DQN v7 state: [external CPU %, available RAM MB, prompt tokens], scaled to ~[0, 1]."""
+    return np.array([external_cpu / V7_STATE_SCALE[0], available_mb / V7_STATE_SCALE[1],
+                     prompt_tokens / V7_STATE_SCALE[2]], dtype=np.float32)
+
+
+class RLPolicyV7(AdaptivePolicy):
+    """DQN v7 (contextual bandit, gamma 0) over the v7 arms, state from v7_state()."""
+
+    def __init__(self, agent, arms, sampler=None, patience=2, emergency_cpu: float | None = None,
+                 emergency_action="balanced"):
+        super().__init__(sampler=sampler, patience=patience, emergency_cpu=emergency_cpu,
+                         emergency_action=emergency_action)
+        self.agent, self.arms = agent, [str(a) for a in arms]
+        self.agent.epsilon = 0.0
+        if agent.action_size != len(self.arms):
+            raise ValueError("agent action count does not match the arm list")
+
+    def choose(self, telemetry, prompt, input_tokens):
+        import psutil
+
+        available_mb = telemetry.get("available_mb")
+        if available_mb is None:
+            available_mb = psutil.virtual_memory().available / 2 ** 20
+        state = v7_state(float(telemetry["external_cpu_percent"]), float(available_mb), float(input_tokens or 0))
+        arm = self.arms[int(np.argmax(self.agent.q_values(state)))]
+        self.last_telemetry["available_mb"] = round(float(available_mb), 1)
+        return arm
+
+    def safe_action(self):
+        return "balanced"
+
+
+class OnlineBanditPolicyV7(OnlineBanditPolicy):
+    """
+    Online bandit over the v7 arms (keeps the P1.3 fixes of OnlineBanditPolicy:
+    outlier/stall rule, bin hysteresis, switch-token cost attribution).
+
+    - Context bins: the external CPU edges of the prior file (the Stage 4 rule edges).
+    - Warm start: per bin, the v7 load-sweep median s/token of every arm (not the DQN),
+      with `prior_weight` pseudo-observations.
+    - Exploration pruning: never explore an arm whose estimate is over 2x the best in
+      that bin, and never explore threads_10 in the top load bin.
+    """
+
+    def __init__(self, arms, edges, prior, prior_weight=2.0, sampler=None, seed=0, emergency_cpu=None,
+                 emergency_action="balanced", **kwargs):
+        super().__init__(prior_agent=None, edges=tuple(edges), prior_weight=prior_weight, sampler=sampler, seed=seed,
+                         emergency_cpu=emergency_cpu, emergency_action=emergency_action, **kwargs)
+        self.actions = [str(a) for a in arms]
+        self.prior = {int(b): [float(v) for v in values] for b, values in prior.items()}
+        for b, values in self.prior.items():
+            if len(values) != len(self.actions):
+                raise ValueError(f"prior for bin {b} has {len(values)} values for {len(self.actions)} arms")
+
+    @classmethod
+    def from_file(cls, path, **kwargs):
+        import yaml
+
+        with open(path, "r", encoding="utf-8") as f:
+            spec = yaml.safe_load(f)
+        return cls(spec["arms"], spec["edges"], spec["prior_sec_per_token"],
+                   prior_weight=spec.get("prior_weight", 2.0), **kwargs)
+
+    def _ensure_bin(self, b, prompt, input_tokens, telemetry):
+        if b in self.sums:
+            return
+        n = len(self.actions)
+        self.sums[b], self.weights[b], self.counts[b] = np.zeros(n), np.zeros(n), np.zeros(n)
+        if b in self.prior:
+            prior = np.array(self.prior[b], dtype=float)
+            self.sums[b] = prior * self.prior_weight
+            self.weights[b] = np.full(n, float(self.prior_weight))
+
+    def select(self, b):
+        w = self.weights[b]
+        est = self.estimates(b)
+        top_bin = b >= len(self.edges)
+        candidates = [a for a in self.actions if not (top_bin and a == "threads_10")]
+        known = [est[self.actions.index(a)] for a in candidates if not np.isnan(est[self.actions.index(a)])]
+        if known:
+            best = min(known)
+            candidates = [a for a in candidates
+                          if np.isnan(est[self.actions.index(a)]) or est[self.actions.index(a)] <= 2.0 * best]
+        untried = [a for a in candidates if w[self.actions.index(a)] <= 1e-9]
+        if untried:
+            return self.rng.choice(untried)
+        scores = {a: est[self.actions.index(a)] * (1.0 - self.bonus / np.sqrt(w[self.actions.index(a)]))
+                  for a in candidates}
+        low = min(scores.values())
+        return self.rng.choice([a for a, s in scores.items() if s <= low + 1e-12])

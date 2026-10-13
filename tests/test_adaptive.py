@@ -145,15 +145,14 @@ def test_cores_heuristic_is_stable_and_reduces_budget_as_load_rises():
     policy = CoresHeuristicPolicy(sampler=sampler, patience=1)
     idle_a = policy.decide(step=0, prompt="p", input_tokens=3)
     idle_b = policy.decide(step=10, prompt="p", input_tokens=3)
-    assert idle_a.get_thread_counts() == idle_b.get_thread_counts()
+    assert idle_a == idle_b
 
-    budgets = [sum(idle_b.get_thread_counts())]
+    budgets = [int(idle_b.split("_")[1])]
     for step, cpu in enumerate((35, 60, 90), start=2):
         sampler.cpu = cpu
-        action = policy.decide(step=step * 10, prompt="p", input_tokens=3)
-        budgets.append(sum(action.get_thread_counts()))
+        budgets.append(int(policy.decide(step=step * 10, prompt="p", input_tokens=3).split("_")[1]))
     assert budgets == sorted(budgets, reverse=True)
-    assert set(budgets).issubset(set(PartitionStrategy.THREAD_BUDGETS))
+    assert set(budgets).issubset(set(PartitionStrategy.V7_THREAD_ARMS))
 
 
 @pytest.mark.parametrize("interval", [5, 10, 20])
@@ -480,26 +479,44 @@ def test_v5r_audit_retains_all_historical_contexts_in_primary():
 
 # --- P1 Unit & Regression Tests ---
 
-def test_cores_heuristic_clamp_formula_and_mapping():
-    sampler = ScriptedSampler(0.0)
-    policy = CoresHeuristicPolicy(sampler=sampler, logical_cores=16, thread_budgets=(3, 6, 10), patience=0)
+@pytest.mark.parametrize("cpu, target, arm", [
+    (0.0, 10, "threads_10"),   # 10 - 0 = 10
+    (10.0, 8, "threads_6"),    # 10 - round(1.6) = 8 -> tie 6/10 -> 6
+    (20.0, 7, "threads_6"),    # 10 - round(3.2) = 7 -> 6
+    (30.0, 5, "threads_4"),    # 10 - round(4.8) = 5 -> tie 4/6 -> 4
+    (40.0, 4, "threads_4"),    # 10 - round(6.4) = 4
+    (45.0, 3, "threads_3"),    # 10 - round(7.2) = 3
+    (50.0, 2, "threads_2"),    # 10 - 8 = 2
+    (95.0, 2, "threads_2"),    # clamp at 2
+])
+def test_cores_heuristic_v7_formula_and_snapping(cpu, target, arm):
+    policy = CoresHeuristicPolicy(sampler=ScriptedSampler(cpu), patience=0)
+    assert policy.decide(step=0, prompt="p", input_tokens=3) == arm
+    assert policy.last_telemetry["target_threads"] == target
 
-    # 0% external CPU -> 16 available -> clamp(16, 1, 10) = 10 threads
-    policy.decide(step=0, prompt="p", input_tokens=3)
-    assert policy.last_telemetry["target_threads"] == 10
-    assert policy.last_telemetry["cores_heuristic_action"] == 0  # static
 
-    # 50% external CPU -> 8 busy -> 8 available -> clamp(8, 1, 10) = 8 -> 6 threads
-    sampler.cpu = 50.0
-    policy.decide(step=10, prompt="p", input_tokens=3)
-    assert policy.last_telemetry["target_threads"] == 8
-    assert policy.last_telemetry["cores_heuristic_action"] == 2  # latency_optimized
+def test_lookup_rule_bins_and_hysteresis(tmp_path):
+    import yaml
+    from src.scheduler.adaptive import LookupRulePolicy
 
-    # 85% external CPU -> 13.6 busy -> 2.4 available -> clamp(2, 1, 10) = 2 -> 3 threads
-    sampler.cpu = 85.0
-    policy.decide(step=20, prompt="p", input_tokens=3)
-    assert policy.last_telemetry["target_threads"] == 2
-    assert policy.last_telemetry["cores_heuristic_action"] == 1  # balanced
+    path = tmp_path / "rule.yaml"
+    path.write_text(yaml.safe_dump({"edges": [30.0, 60.0], "arms": ["threads_10", "threads_4", "threads_2"]}))
+    sampler = ScriptedSampler(10.0)
+    policy = LookupRulePolicy.from_file(path, sampler=sampler, patience=0)
+    picks = []
+    for step, cpu in enumerate([10.0, 30.0, 30.1, 59.9, 60.0, 61.0, 99.0]):
+        sampler.cpu = cpu
+        picks.append(policy.decide(step=step * 10, prompt="p", input_tokens=3))
+    assert picks == ["threads_10", "threads_10", "threads_4", "threads_4", "threads_4", "threads_2", "threads_2"]
+
+    sticky = LookupRulePolicy([30.0], ["threads_10", "threads_2"], sampler=ScriptedSampler(10.0), patience=2)
+    seq = []
+    for step, cpu in enumerate([10.0, 90.0, 90.0, 10.0, 90.0]):
+        sticky.sampler.cpu = cpu
+        seq.append(sticky.decide(step=step * 10, prompt="p", input_tokens=3))
+    assert seq == ["threads_10", "threads_10", "threads_2", "threads_2", "threads_2"]
+    with pytest.raises(ValueError):
+        LookupRulePolicy([30.0], ["threads_2"])
 
 
 def test_timeline_segment_oracle_computes_hindsight_bound():

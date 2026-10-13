@@ -101,8 +101,7 @@ def make_policies(agent, threshold, sampler, patience=2, seed=0, bandit_edges=(3
     policies["rule_noh"] = lambda: ThresholdPolicy(threshold, sampler=sampler, patience=0,
                                                     emergency_cpu=emergency_cpu, emergency_action=1)
     policies["cores_heuristic"] = lambda: CoresHeuristicPolicy(
-        sampler=sampler, thread_budgets=thread_budgets, patience=patience,
-        emergency_cpu=emergency_cpu
+        sampler=sampler, patience=patience, emergency_cpu=emergency_cpu
     )
 
     prior = None

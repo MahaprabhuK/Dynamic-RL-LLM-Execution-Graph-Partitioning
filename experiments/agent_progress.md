@@ -49,3 +49,10 @@
   load never arrives in the smoke test (plumbing test only).
 - Segment oracle on v5: experiments/e0b_segment_oracle.{csv,txt}; all 5 scenarios within 0.2 s of
   the expected values in the plan.
+
+## Stage 3: load sweep v7 (finished 2026-10-13 ~11:30)
+- Sweep stopped at 284/288 around 09:12 (process gone, cause unknown); resumed with --resume, 288/288.
+- RAM before runs 77.8-83.5 %; 30 paging-flagged runs (system pages input >= 1000 in a segment).
+- Best arm by workers: 0 threads_6, 4 threads_10, 8/9 threads_6, 10/11 threads_4, 12 balanced,
+  14 threads_2. Summary at the end of data/processed/load_sweep_v7.log.
+- CoresHeuristicPolicy rewritten for v7 arms (snap to nearest arm, ties to fewer threads); 91 tests pass.
