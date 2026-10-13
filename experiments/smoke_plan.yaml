@@ -1,0 +1,25 @@
+# Stage 2A smoke test (Prompt 2 of Agent_Prompts_Unfinished_Work.pdf). Do not edit after the run starts.
+stage: smoke
+tag: smoke_v7
+prompts: [1]
+# spike: 0 workers, 10 busy workers from token 60. With 50 tokens the load change is never reached;
+# the plan specifies 50 tokens, so this is a plumbing test, not a load test.
+scenarios:
+  spike: [[0, 0], [60, 10]]
+max_new_tokens: 50
+decision_interval: 10
+seed: 11
+ram_guard: {max_percent: 85.0, wait_seconds: 30, retries: 10}
+paging_flag: {system_pages_input_per_segment: 1000}
+conditions:
+  - {name: threads_2, policy: fixed, arm: threads_2}
+  - {name: balanced, policy: fixed, arm: balanced}
+  - {name: latency_optimized, policy: fixed, arm: latency_optimized}
+  - {name: static, policy: fixed, arm: static}
+  - {name: rule_v5, policy: rule, threshold: 60.0, low_arm: static, high_arm: balanced, patience: 2, interval: 10}
+  - {name: cores_heuristic, policy: cores_heuristic, patience: 2, interval: 10}
+  # dqn_model_v6.pth is not on this machine (*.pth gitignored); v6_local is a retrain of v6 from
+  # data/processed/training_data_v6.csv with src/rl/train.py (seed 42, 100 episodes).
+  - {name: rl_adaptive, policy: rl, model: data/processed/dqn_model_v6_local.pth, patience: 2, interval: 10}
+  - {name: bandit_adaptive, policy: bandit, prior_model: data/processed/dqn_model_v6_local.pth, edges: [35.0], seed: 11}
+checks: experiments/check_smoke.py

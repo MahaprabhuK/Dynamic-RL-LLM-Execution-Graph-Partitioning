@@ -878,3 +878,45 @@ def test_v7_thread_arms_are_single_stage_with_fixed_threads():
     assert set(PartitionStrategy.V7_ARMS) == {f"threads_{b}" for b in PartitionStrategy.V7_THREAD_ARMS} | {"balanced"}
     with pytest.raises(ValueError):
         apply_partition_strategy("threads_5")
+
+
+def test_run_v7_plan_on_tiny_engine(tiny_engine, tmp_path, monkeypatch):
+    import yaml
+    import run_v7
+
+    plan = {
+        "stage": "test", "tag": "unit", "prompts": [1, 2], "max_new_tokens": 12, "decision_interval": 4, "seed": 3,
+        "scenarios": {"spike": [[0, 0], [6, 1]], "steady_idle": [[0, 0]]},
+        "ram_guard": {"max_percent": 100.0, "wait_seconds": 0, "retries": 0},
+        "paging_flag": {"system_pages_input_per_segment": 1000},
+        "conditions": [
+            {"name": "threads_2", "policy": "fixed", "arm": "threads_2"},
+            {"name": "balanced", "policy": "fixed", "arm": "balanced"},
+            {"name": "rule_v5", "policy": "rule", "threshold": 60.0, "low_arm": "static", "high_arm": "balanced",
+             "patience": 2, "interval": 4},
+        ],
+    }
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(yaml.safe_dump(plan))
+    monkeypatch.setattr(run_v7, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(run_v7, "load_prompts", lambda csv_path=None, limit=None: ["first prompt", "second prompt"])
+    monkeypatch.setattr(run_v7.time, "sleep", lambda s: None)
+    run_v7.run_plan(plan_path, allow_uncommitted=True)
+
+    runs = pd.read_csv(tmp_path / "v7runs_unit.csv")
+    assert len(runs) == 2 * 2 * 3
+    assert runs.groupby(["prompt_id", "scenario"])["token_ids"].nunique().eq(1).all()
+    fixed = runs[runs["condition"] != "rule_v5"]
+    assert (fixed["num_switches"] == 0).all() and (fixed["emergency_triggers"] == 0).all()
+    for col in ["commit_hash", "ram_percent_before", "available_mb_before", "page_faults_delta",
+                "system_pages_input_delta", "wall_clock_start", "decode_sec_per_token"]:
+        assert runs[col].notna().all(), col
+    timelines = pd.read_csv(tmp_path / "v7timelines_unit.csv")
+    assert {"arm", "emergency_trigger", "emergency_kind"} <= set(timelines.columns)
+    assert len(pd.read_csv(tmp_path / "v7segments_unit.csv")) == 12 * 2  # 2 segments per run
+
+    # Resume does not repeat finished runs; a second fresh start refuses to overwrite
+    run_v7.run_plan(plan_path, resume=True, allow_uncommitted=True)
+    assert len(pd.read_csv(tmp_path / "v7runs_unit.csv")) == 12
+    with pytest.raises(SystemExit):
+        run_v7.run_plan(plan_path, allow_uncommitted=True)
