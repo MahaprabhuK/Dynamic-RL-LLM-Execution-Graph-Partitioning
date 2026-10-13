@@ -755,7 +755,7 @@ def test_engine_segment_log_records_paging_per_10_tokens(tiny_engine):
     tiny_engine("hello", strategy="threads_2", max_new_tokens=25, ignore_eos=True, segment_log=segments)
     assert [(s["start_step"], s["end_step"]) for s in segments] == [(0, 9), (10, 19), (20, 24)]
     for s in segments:
-        for key in ["swap_sin_delta", "swap_sout_delta", "page_faults_delta", "available_mb"]:
+        for key in ["swap_sin_delta", "swap_sout_delta", "page_faults_delta", "system_pages_input_delta", "available_mb"]:
             assert s[key] is not None and s[key] >= 0
 
 

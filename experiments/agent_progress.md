@@ -34,3 +34,9 @@
 - F3 rerun -> experiments/f3_paging_check_run2.txt (first run kept unchanged). Helper reached
   818 MB available, but the process page-fault delta still did not rise (ratio in the file).
   Windows trims other processes, not the model's actively used pages. F3 still FAILED; stopped again.
+- User decision (08:05): add a system-wide paging counter. Added src/telemetry/system_paging.py
+  (PDH raw "\Memory\Pages Input/sec", cumulative hard-fault page reads, machine-wide) as
+  `system_pages_input_delta` in every segment record; per-process page faults kept.
+- F3 run 3 -> experiments/f3_paging_check_run3.txt: system pages-input rises clearly under
+  pressure (totals and ratio in the file). Per-process count still does not. **F3 PASSED on the
+  system counter.** Stage 1 complete.

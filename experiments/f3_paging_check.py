@@ -56,10 +56,13 @@ def main():
     both = pd.concat([normal, pressure], ignore_index=True)
     totals = both.groupby("run", sort=False).agg(
         total_page_faults=("page_faults_delta", "sum"), max_segment_page_faults=("page_faults_delta", "max"),
+        system_pages_input=("system_pages_input_delta", "sum"),
+        max_segment_system_pages_input=("system_pages_input_delta", "max"),
         swap_sin=("swap_sin_delta", "sum"), swap_sout=("swap_sout_delta", "sum"),
         min_available_mb=("available_mb", "min"))
     totals["latency_seconds"] = [round(normal_s, 2), round(pressure_s, 2)]
     ratio = totals.loc["pressure", "total_page_faults"] / max(totals.loc["normal", "total_page_faults"], 1)
+    sys_ratio = totals.loc["pressure", "system_pages_input"] / max(totals.loc["normal", "system_pages_input"], 1)
 
     lines = [
         "F3 paging check (written by experiments/f3_paging_check.py)",
@@ -78,6 +81,8 @@ def main():
         totals.to_string(),
         "",
         f"page-fault delta ratio pressure/normal: {ratio:.2f}",
+        f"system pages-input delta ratio pressure/normal: {sys_ratio:.2f} "
+        f"(normal {totals.loc['normal', 'system_pages_input']}, pressure {totals.loc['pressure', 'system_pages_input']})",
         "note: psutil reports swap sin/sout as 0 on Windows; num_page_faults counts soft and hard faults.",
     ]
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")

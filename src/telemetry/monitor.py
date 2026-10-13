@@ -87,12 +87,20 @@ class SegmentPagingTracker:
     Each sample() returns the change since the previous sample of
     psutil.swap_memory().sin / .sout (always 0 on Windows, where psutil does not
     expose them), this process's page-fault count (num_page_faults on Windows;
-    includes soft faults) and the current available RAM in MB.
+    includes soft faults), the machine-wide hard paging count (Windows
+    "Memory\Pages Input/sec" raw counter; -1 when unavailable) and the current
+    available RAM in MB.
     """
+
+    _system = None
 
     def __init__(self, process: psutil.Process | None = None):
         self.process = process or psutil.Process()
+        if SegmentPagingTracker._system is None:
+            from src.telemetry.system_paging import SystemPagesInput
+            SegmentPagingTracker._system = SystemPagesInput()  # one PDH query per process
         self._last = self._read()
+        self._last_system = self._system.read()
 
     def _read(self):
         sm = psutil.swap_memory()
@@ -109,11 +117,14 @@ class SegmentPagingTracker:
         sin, sout, faults = self._read()
         last_sin, last_sout, last_faults = self._last
         self._last = (sin, sout, faults)
+        system, last_system = self._system.read(), self._last_system
+        self._last_system = system
         vm = psutil.virtual_memory()
         return {
             "swap_sin_delta": max(0, sin - last_sin),
             "swap_sout_delta": max(0, sout - last_sout),
             "page_faults_delta": max(0, faults - last_faults),
+            "system_pages_input_delta": -1 if system is None or last_system is None else max(0, system - last_system),
             "available_mb": round(vm.available / 2 ** 20, 1),
             "ram_percent": vm.percent,
         }
