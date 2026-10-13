@@ -67,3 +67,12 @@
 - 0 skipped, 25 paging-flagged runs. Frozen: rule_i10_p1_off (interval 10, patience 1, no latency
   switch), experiments/e2_frozen.yaml. n=3 per cell; 4 configs within 2 % of the best total.
 - All rule configs beat fixed balanced in spike by 3.7-6.9 %.
+
+## Stage 6: DQN v7, bandit prior, main-run plan (2026-10-13 ~12:40)
+- DQN v7 (leave-one-prompt-out): mean regret 0.00534 s/tok, best arm 35 %; rule_lookup fold 0.00141, 79 %;
+  cores_heuristic 0.01211, 19 %. DQN does NOT beat rule_lookup offline. Final model
+  data/processed/dqn_model_v7.pth (gitignored).
+- experiments/e4_bandit_prior.yaml and experiments/e4_plan.yaml (9 conditions, 675 runs, prompts 21-35,
+  two nights) written by build_e4_plan.py.
+- Next: Stage 7 main run (needs user go-ahead, free RAM, ideally
+  CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1 or run outside Claude Code).

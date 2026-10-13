@@ -1,0 +1,13 @@
+held_out_prompt,policy,num_contexts,mean_regret_sec_per_token,percent_best_arm,fold_rule
+1,dqn_v7,16,0.00185,56.2,
+1,rule_lookup_fold,16,0.00138,81.2,"edges [64.27, 74.97, 83.59] arms ['threads_6', 'threads_4', 'balanced', 'threads_2']"
+1,rule_lookup_full_in_sample,16,0.00138,81.2,
+1,cores_heuristic,16,0.01224,18.8,
+2,dqn_v7,16,0.00776,31.2,
+2,rule_lookup_fold,16,0.00144,81.2,"edges [64.07, 75.07, 83.86] arms ['threads_6', 'threads_4', 'balanced', 'threads_2']"
+2,rule_lookup_full_in_sample,16,0.00144,81.2,
+2,cores_heuristic,16,0.01212,18.8,
+3,dqn_v7,16,0.00641,18.8,
+3,rule_lookup_fold,16,0.0014,75.0,"edges [63.07, 75.24, 83.86] arms ['threads_6', 'threads_4', 'threads_3', 'threads_2']"
+3,rule_lookup_full_in_sample,16,0.00107,87.5,
+3,cores_heuristic,16,0.01197,18.8,

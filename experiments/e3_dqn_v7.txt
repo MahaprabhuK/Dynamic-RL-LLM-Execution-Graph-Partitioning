@@ -1,0 +1,37 @@
+DQN v7 offline evaluation (experiments/train_dqn_v7.py), source: data/processed/load_sweep_v7.csv
+arms: ['threads_2', 'threads_3', 'balanced', 'threads_4', 'threads_6', 'threads_10']; state: [external CPU %, available RAM MB, prompt tokens] (scaled); reward: -s/token
+prompt tokens: {np.int64(1): 10, np.int64(2): 8, np.int64(3): 9}; seed 42; 300 episodes; gamma 0; full feedback
+
+Leave-one-prompt-out folds:
+ held_out_prompt                     policy  num_contexts  mean_regret_sec_per_token  percent_best_arm
+               1                     dqn_v7            16                    0.00185              56.2
+               1           rule_lookup_fold            16                    0.00138              81.2
+               1 rule_lookup_full_in_sample            16                    0.00138              81.2
+               1            cores_heuristic            16                    0.01224              18.8
+               2                     dqn_v7            16                    0.00776              31.2
+               2           rule_lookup_fold            16                    0.00144              81.2
+               2 rule_lookup_full_in_sample            16                    0.00144              81.2
+               2            cores_heuristic            16                    0.01212              18.8
+               3                     dqn_v7            16                    0.00641              18.8
+               3           rule_lookup_fold            16                    0.00140              75.0
+               3 rule_lookup_full_in_sample            16                    0.00107              87.5
+               3            cores_heuristic            16                    0.01197              18.8
+
+Fold rules (built from the two training prompts):
+  held-out 1: edges [64.27, 74.97, 83.59] arms ['threads_6', 'threads_4', 'balanced', 'threads_2']
+  held-out 2: edges [64.07, 75.07, 83.86] arms ['threads_6', 'threads_4', 'balanced', 'threads_2']
+  held-out 3: edges [63.07, 75.24, 83.86] arms ['threads_6', 'threads_4', 'threads_3', 'threads_2']
+
+Mean over folds:
+                            mean_regret_sec_per_token  percent_best_arm
+policy                                                                 
+dqn_v7                                        0.00534          35.40000
+rule_lookup_fold                              0.00141          79.13333
+rule_lookup_full_in_sample                    0.00130          83.30000
+cores_heuristic                               0.01211          18.80000
+
+DQN v7 does NOT beat rule_lookup offline (mean regret not lower over held-out folds)
+(rule_lookup_full_in_sample uses all three prompts, so it has seen the held-out prompt.)
+
+Final model (all three prompts): data/processed/dqn_model_v7.pth
+final model picks on the sweep contexts: {'threads_10': 20, 'threads_4': 11, 'threads_6': 10, 'threads_2': 6, 'threads_3': 1}
