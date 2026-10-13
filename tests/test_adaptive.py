@@ -920,3 +920,20 @@ def test_run_v7_plan_on_tiny_engine(tiny_engine, tmp_path, monkeypatch):
     assert len(pd.read_csv(tmp_path / "v7runs_unit.csv")) == 12
     with pytest.raises(SystemExit):
         run_v7.run_plan(plan_path, allow_uncommitted=True)
+
+
+def test_experiments_segment_oracle_picks_cheapest_arm_per_segment():
+    sys.path.insert(0, str(ROOT_DIR / "experiments"))
+    from segment_oracle import segment_oracle_table
+
+    rows = []
+    # arm a: fast in segment 0, slow in segment 1; arm b: the opposite; policy p in between
+    for step in range(20):
+        a, b = (0.1, 0.5) if step < 10 else (0.5, 0.1)
+        for cond, sec in [("a", a), ("b", b), ("p", 0.3)]:
+            rows.append({"context_id": 1, "scenario": "s", "condition": cond, "token_step": step, "token_seconds": sec})
+    table, per_ctx = segment_oracle_table(pd.DataFrame(rows), ["a", "b"], ["p"])
+    assert np.isclose(per_ctx["segment_oracle"].iloc[0], 2.0)
+    assert np.isclose(per_ctx["best_single_fixed"].iloc[0], 6.0)
+    assert np.isclose(table["max_adaptive_gain_percent"].iloc[0], 100 * 4 / 6)
+    assert np.isclose(table["p_regret_vs_oracle_s"].iloc[0], 4.0)

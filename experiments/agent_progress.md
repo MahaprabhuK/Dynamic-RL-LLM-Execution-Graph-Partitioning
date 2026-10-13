@@ -40,3 +40,12 @@
 - F3 run 3 -> experiments/f3_paging_check_run3.txt: system pages-input rises clearly under
   pressure (totals and ratio in the file). Per-process count still does not. **F3 PASSED on the
   system counter.** Stage 1 complete.
+
+## Stage 2: smoke test + segment oracle (08:20)
+- v6 DQN retrained locally as data/processed/dqn_model_v6_local.pth (training_data_v6.csv, seed 42,
+  100 episodes); used for rl_adaptive and the bandit prior in the smoke test.
+- Smoke (tag smoke_v7, run_v7.py + experiments/smoke_plan.yaml): all checks PASS,
+  experiments/check_smoke_smoke_v7.txt. Note: plan says 50 tokens with the spike at token 60, so the
+  load never arrives in the smoke test (plumbing test only).
+- Segment oracle on v5: experiments/e0b_segment_oracle.{csv,txt}; all 5 scenarios within 0.2 s of
+  the expected values in the plan.

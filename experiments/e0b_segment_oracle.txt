@@ -1,0 +1,9 @@
+Segment oracle (experiments/segment_oracle.py), source: data/processed/adaptive_timelines_v5.csv
+segment = 10 tokens; fixed arms: balanced, latency_optimized, static; times = summed per-token seconds
+
+    scenario  num_contexts  mean_segment_oracle_s  mean_best_single_fixed_s  max_adaptive_gain_percent  mean_rule_adaptive_s  rule_adaptive_regret_vs_oracle_s  mean_rl_adaptive_s  rl_adaptive_regret_vs_oracle_s  mean_bandit_adaptive_s  bandit_adaptive_regret_vs_oracle_s
+        ramp             8                  43.88                     52.49                      16.39                 54.25                             10.36               66.53                           22.64                   82.75                               38.87
+      relief             8                  27.27                     31.14                      12.41                 28.52                              1.24               30.46                            3.19                   32.25                                4.98
+       spike             8                  33.53                     35.67                       5.99                 57.47                             23.94               57.29                           23.76                   57.12                               23.58
+steady_heavy             8                  32.49                     32.89                       1.21                 32.92                              0.43               42.36                            9.87                   41.42                                8.93
+ steady_idle             8                  20.75                     21.32                       2.68                 21.21                              0.45               21.49                            0.74                   22.26                                1.51
