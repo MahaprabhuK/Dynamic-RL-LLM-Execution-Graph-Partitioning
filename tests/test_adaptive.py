@@ -937,3 +937,24 @@ def test_experiments_segment_oracle_picks_cheapest_arm_per_segment():
     assert np.isclose(per_ctx["best_single_fixed"].iloc[0], 6.0)
     assert np.isclose(table["max_adaptive_gain_percent"].iloc[0], 100 * 4 / 6)
     assert np.isclose(table["p_regret_vs_oracle_s"].iloc[0], 4.0)
+
+
+def test_load_sweep_v7_on_tiny_engine(tiny_engine, tmp_path, monkeypatch):
+    import yaml
+    import run_load_sweep_v7 as sweep
+
+    plan = yaml.safe_load((ROOT_DIR / "experiments" / "e1_plan.yaml").read_text(encoding="utf-8"))
+    plan.update({"prompts": [1, 2], "background_workers": [0, 1], "repeats": 1, "decode_tokens": 4, "total_runs": 24,
+                 "ram_guard": {"max_percent": 100.0, "wait_seconds": 0, "retries": 0}})
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(yaml.safe_dump(plan))
+    monkeypatch.setattr(sweep, "load_prompts", lambda csv_path=None, limit=None: ["first", "second"])
+    df = sweep.run_sweep(plan_path, data_dir=tmp_path, allow_uncommitted=True, settle=0)
+    assert len(df) == 2 * 2 * 6 and set(df["arm"]) == set(plan["arms"])
+    assert (df["num_generated_tokens"] == 5).all() and df["decode_sec_per_token"].notna().all()
+    assert sweep.blocks(plan) == sweep.blocks(plan)
+    assert all(sorted(b[3]) == sorted(plan["arms"]) for b in sweep.blocks(plan))
+    text = sweep.write_summary(plan_path, data_dir=tmp_path, out_path=tmp_path / "summary.txt")
+    assert "best" in text and "threads_3 vs balanced" in text
+    df2 = sweep.run_sweep(plan_path, resume=True, data_dir=tmp_path, allow_uncommitted=True, settle=0)
+    assert len(df2) == 24
