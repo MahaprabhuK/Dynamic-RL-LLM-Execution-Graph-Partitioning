@@ -884,14 +884,15 @@ def test_ram_guard_skips_and_logs_after_ten_retries(tmp_path):
 
 
 def test_v7_thread_arms_are_single_stage_with_fixed_threads():
-    from src.llm.partition import apply_partition_strategy
+    from src.llm.partition import apply_partition_strategy, physical_core_count
 
     for budget in PartitionStrategy.V7_THREAD_ARMS:
         arm = apply_partition_strategy(f"threads_{budget}")
         assert arm.arm_name == f"threads_{budget}"
         assert arm.get_layer_ranges() == [(0, 21)] and arm.get_thread_counts() == [budget]
     balanced = apply_partition_strategy("balanced")
-    assert balanced.arm_name == "balanced" and balanced.get_thread_counts() == [3, 3]
+    expected_balanced_threads = [max(1, round(0.3 * physical_core_count())), max(1, round(0.3 * physical_core_count()))]
+    assert balanced.arm_name == "balanced" and balanced.get_thread_counts() == expected_balanced_threads
     assert set(PartitionStrategy.V7_ARMS) == {f"threads_{b}" for b in PartitionStrategy.V7_THREAD_ARMS} | {"balanced"}
     with pytest.raises(ValueError):
         apply_partition_strategy("threads_5")
