@@ -1,0 +1,74 @@
+Excluding 4 context(s) with paging stalls (a run > 2.0x the median of its condition and scenario): [14, 19, 36, 39]. Raw data is kept in adaptive_runs_v5.csv.
+
+================================================================================
+MEAN LATENCY BY SCENARIO AND CONDITION (seconds)
+================================================================================
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+ramp             60.02            76.36              69.55        54.93   389.50          55.52  412.57
+relief           33.77            33.58              33.51        30.69    34.40          30.23   77.25
+spike            37.70            59.18              45.34        59.50    85.96          59.45  133.19
+steady_heavy     34.12            42.93              45.71        38.67    34.30          33.84   91.46
+steady_idle      29.74            23.74              22.76        22.80    22.36          22.53   22.74
+
+PAIRED DIFFERENCES: bandit_adaptive VS OTHERS (negative = bandit_adaptive faster)
+    scenario          baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  mean_diff_percent  significant
+        ramp          balanced             6            16.3454   -2.3235    37.7944              22.42        False
+      relief          balanced             7            -0.1854   -1.8562     1.7134              -0.43        False
+       spike          balanced             8            21.4812   12.4668    32.2325              57.09         True
+steady_heavy          balanced             7             8.8145    3.9131    13.7994              24.40         True
+ steady_idle          balanced             8            -5.9926   -7.0197    -4.6431             -19.81         True
+        ramp latency_optimized             6             6.8177  -18.6127    33.9586              15.76        False
+      relief latency_optimized             7             0.0720   -1.3490     1.8880               0.26        False
+       spike latency_optimized             8            13.8382    3.1981    26.2284              32.74         True
+steady_heavy latency_optimized             7            -2.7748   -7.8214     3.1366              -6.70        False
+ steady_idle latency_optimized             8             0.9881   -0.4777     3.5343               4.08        False
+        ramp       rl_adaptive             6            21.4333    2.3438    44.9403              33.68         True
+      relief       rl_adaptive             7             2.8955    0.6403     5.2636               9.90         True
+       spike       rl_adaptive             8            -0.3161  -20.6628    20.6015              15.68        False
+steady_heavy       rl_adaptive             7             4.2615   -5.0379    12.1673              12.21        False
+ steady_idle       rl_adaptive             8             0.9472   -0.5684     3.5703               3.85        False
+        ramp           rl_once             6          -313.1333 -389.0921  -250.9451             -80.91         True
+      relief           rl_once             7            -0.8225   -2.7834     1.3920              -2.14        False
+       spike           rl_once             8           -26.7799  -55.6942     1.5112             -16.05        False
+steady_heavy           rl_once             7             8.6337    3.7200    13.9781              23.48         True
+ steady_idle           rl_once             8             1.3875   -0.0085     4.0988               5.86        False
+        ramp     rule_adaptive             6            20.8476   -4.2463    48.0703              33.79        False
+      relief     rule_adaptive             7             3.3512    1.6885     5.3465              11.23         True
+       spike     rule_adaptive             8            -0.2653  -11.9818    10.7067               4.26        False
+steady_heavy     rule_adaptive             7             9.0956    3.6061    14.3822              24.58         True
+ steady_idle     rule_adaptive             8             1.2135   -0.4121     4.1539               5.30        False
+        ramp            static             6          -336.2087 -402.7358  -269.4389             -82.05         True
+      relief            static             7           -43.6697  -69.3611   -20.0967             -46.43         True
+       spike            static             8           -74.0125  -95.6430   -50.2126             -52.62         True
+steady_heavy            static             7           -48.5295  -86.7573   -14.4566             -37.93         True
+ steady_idle            static             8             1.0011   -0.3839     3.4700               4.01        False
+
+MEAN REGRET VS BEST FIXED STRATEGY IN HINDSIGHT, PER CONTEXT (seconds)
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+ramp              4.79            21.13              14.32        -0.30   334.27           0.29  357.34
+relief            0.76             0.58               0.50        -2.32     1.40          -2.77   44.25
+spike             0.00            21.48               7.64        21.80    48.26          21.75   95.49
+steady_heavy      0.00             8.81              11.59         4.55     0.18          -0.28   57.34
+steady_idle       7.08             1.09               0.10         0.14    -0.30          -0.12    0.09
+
+MEAN STRATEGY SWITCHES PER REQUEST
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+ramp               0.0             3.00                0.0         1.17      0.0           1.33     0.0
+relief             0.0             1.43                0.0         1.29      0.0           1.00     0.0
+spike              0.0             1.25                0.0         1.12      0.0           1.00     0.0
+steady_heavy       0.0             0.00                0.0         0.00      0.0           0.00     0.0
+steady_idle        0.0             2.75                0.0         0.00      0.0           0.00     0.0
+
+ONLINE BANDIT LEARNING: mean regret, first vs second half of the run (seconds)
+  first half  bandit_adaptive=12.88  rl_adaptive=6.30  rl_once=104.52
+  second half bandit_adaptive=7.85  rl_adaptive=4.22  rl_once=28.83
+
+Identical generated tokens across all conditions: 100% of contexts
+Mean decision overhead per request: 0.0051s
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_latency_by_scenario_v5.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_paired_diffs_v5.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_spike_timeline_v5.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_relief_timeline_v5.png

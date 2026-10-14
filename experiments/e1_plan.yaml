@@ -1,0 +1,26 @@
+# Stage 3: load sweep v7 (Prompt 3 of Agent_Prompts_Unfinished_Work.pdf). Do not edit after the run starts.
+stage: e1_load_sweep
+tag: v7
+output: data/processed/load_sweep_v7.csv
+summary: experiments/e1_summary.txt
+prompts: [1, 2, 3]            # training prompts; never used in the main run (21-35)
+decode_tokens: 30             # generated tokens after prefill (prefill token excluded from s/token)
+ignore_eos: true
+background_workers: [0, 4, 8, 9, 10, 11, 12, 14]
+arms: [threads_2, threads_3, balanced, threads_4, threads_6, threads_10]
+repeats: 2
+seed: 7                       # arm order randomised inside each (prompt, workers, repeat) block
+block_order: "prompt-major, then repeat, then workers in seeded random order"
+total_runs: 288
+emergency_latency_switch: "off"
+scheduler: none               # fixed arms only
+load: "busy-loop worker processes started per block and kept for the block; 1 s settle before each run"
+ram_guard: {max_percent: 85.0, wait_seconds: 30, retries: 10}
+paging_flag: {system_pages_input_per_segment: 1000}
+metric: "decode_sec_per_token = median per-token time over tokens 1..30 (token 0 = prefill excluded)"
+analysis:
+  - "per workers level: mean, min, max s/token per arm over 3 prompts x 2 repeats; best arm (lowest mean)"
+  - "paired difference threads_3 vs balanced at every load: mean % and range over the 6 pairs"
+  - "mean external CPU % (during runs) per workers level"
+  - "skipped runs and paging-flagged runs"
+gate: "none (descriptive; feeds Stage 4)"

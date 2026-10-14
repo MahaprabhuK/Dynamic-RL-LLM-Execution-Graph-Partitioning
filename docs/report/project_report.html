@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dynamic RL-Based LLM Execution Graph Partitioning: Project Report</title>
+<style>
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 10.3pt; line-height: 1.45; color: #1d1d1f; }
+  h1 { font-size: 21pt; margin: 0 0 4px 0; color: #12355b; }
+  h2 { font-size: 14pt; color: #12355b; border-bottom: 1.5px solid #12355b; padding-bottom: 2px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #24507d; margin: 14px 0 4px 0; page-break-after: avoid; }
+  p { margin: 5px 0 7px 0; text-align: justify; }
+  .subtitle { font-size: 11.5pt; color: #444; margin-bottom: 10px; }
+  .meta { font-size: 9.5pt; color: #333; border: 1px solid #c9d3df; background: #f4f7fb; padding: 8px 12px; margin: 10px 0 14px 0; }
+  .meta td { padding: 1px 10px 1px 0; border: none; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px 0; font-size: 9pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #c4ccd6; padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { background: #e5ecf4; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.best td { background: #e9f6ea; }
+  tr.bad td { background: #fbeceb; }
+  .box { border-left: 4px solid #24507d; background: #f4f7fb; padding: 6px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .warn { border-left: 4px solid #b5651d; background: #fdf5ec; padding: 6px 12px; margin: 8px 0; page-break-inside: avoid; }
+  figure { margin: 8px 0 12px 0; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 92mm; }
+  figcaption { font-size: 8.8pt; color: #444; margin-top: 3px; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; background: #f1f1f1; padding: 0 2px; }
+  pre { font-family: Consolas, monospace; font-size: 8.3pt; background: #f6f6f6; border: 1px solid #ddd; padding: 6px 8px; white-space: pre-wrap; page-break-inside: avoid; }
+  ul, ol { margin: 4px 0 8px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .pb { page-break-before: always; }
+  .toc li { margin: 1px 0; }
+  .small { font-size: 8.8pt; color: #555; }
+</style>
+</head>
+<body>
+
+<h1>Dynamic RL-Based LLM Execution Graph Partitioning</h1>
+<div class="subtitle">Project report: dataset pipeline, v5r statistical reanalysis, and the v6 policy framework</div>
+
+<table class="meta">
+<tr><td>Author</td><td>Mahaprabhu K</td></tr>
+<tr><td>Report date</td><td>12 October 2026</td></tr>
+<tr><td>Repository</td><td>github.com/MahaprabhuK/Dynamic-RL-LLM-Execution-Graph-Partitioning</td></tr>
+<tr><td>Working branch</td><td><code>improve/meaningful-partitioning</code> (main has the original v1 pipeline)</td></tr>
+<tr><td>Model</td><td>TinyLlama/TinyLlama-1.1B-Chat-v1.0, float32, CPU only</td></tr>
+<tr><td>Hardware</td><td>Laptop, 10 physical / 16 logical CPU cores, 16 GB RAM (RTX 3050 present but unused; torch is a CPU build)</td></tr>
+</table>
+
+<div class="warn"><b>Statistical correction (12 October 2026).</b> The original v5 prose used latency-only outlier exclusions and unadjusted interval-based significance labels. The source CSV has no independent paging telemetry. The v5r reanalysis in <code>data/processed/adaptive_report_v5r.txt</code> retains all 40 contexts, reports paired t and Wilcoxon tests with Holm-adjusted p-values, and supersedes the original v5 inferential claims below. Earlier v3/v4 significance labels are historical and have not been recomputed here.</div>
+
+<h2>Contents</h2>
+<ol class="toc">
+<li>Summary</li>
+<li>Problem and goal</li>
+<li>Project timeline</li>
+<li>System design</li>
+<li>Phase 1 (v1/v2): first pipeline and why its results were noise</li>
+<li>Phase 2 (v3): real strategies and a corrected methodology</li>
+<li>Phase 3: contextual-bandit DQN</li>
+<li>Phase 4: intra-generation re-scheduling (v3 adaptive)</li>
+<li>Phase 5 (v4): online bandit</li>
+<li>Phase 6: load sweep</li>
+<li>Phase 7 (v5): multi-level load and the ramp scenario</li>
+<li>Methodology and statistics</li>
+<li>Engineering, testing and reproducibility</li>
+<li>Limitations and open problems</li>
+<li>Next steps</li>
+<li>Appendix: files, commands and data index</li>
+</ol>
+
+<h2>1. Summary</h2>
+<p>The project builds a scheduler that decides, for each LLM request on a single CPU machine, how the model should be executed. TinyLlama-1.1B runs layer by layer through a hand-written decode loop. The action space is three thread budgets: {3, 6, 10} threads. Layer staging is the execution mechanism used to enforce these budgets across the 22 decoder layers: <code>static</code> executes all 22 layers in a single stage with 10 threads; <code>latency_optimized</code> executes all 22 layers in a single stage with 6 threads; and <code>balanced</code> splits the layers into two sequential stages (layers 0-10 and 11-21) executed one after the other at 3 threads each, running at a 3-thread budget throughout generation. Because execution is single-device CPU inference, stages run sequentially without parallel pipelining. All three strategies yield token-identical output to Hugging Face <code>model.generate()</code>, so the choice only affects latency.</p>
+<p>The work went through seven phases. The early versions (v1/v2) produced results that turned out to be noise, because the strategies were computationally identical and were measured one after another. v3 fixed both problems. Strategies now differ in thread budgets {3, 6, 10}, and measurements are paired and randomized under controlled background CPU load. A contextual-bandit DQN was then trained on the v3 data. After that the project moved to its main idea, <b>re-deciding the strategy every 10 tokens during generation</b>, plus an online bandit that keeps learning from measured token latency.</p>
+<div class="box">
+<b>Main results</b>
+<ul>
+<li>Which strategy is fastest depends on load. Idle machine: 10 threads (<code>static</code>) wins. Around 8 busy workers: 6 threads. At 10-14 busy workers: 3+3 threads (<code>balanced</code>). At 12 workers <code>static</code> oversubscribes the CPU and is about 18x slower per token than <code>balanced</code> (2.14 s vs 0.116 s per token).</li>
+<li>In all five scenarios, the re-deciding DQN (<code>rl_adaptive</code>) and the 60% threshold rule (<code>rule_adaptive</code>) are statistically indistinguishable (Holm-adjusted p = 1.0, mean differences -0.6 to +12.5 s). The gain comes from intra-generation re-deciding, not from reinforcement learning.</li>
+<li>Compared to the best fixed baseline, <code>rl_adaptive</code> did not show a statistically significant advantage in any scenario after Holm adjustment across the 30 predefined comparisons. In ramp (all contexts, n=8), <code>rl_adaptive</code> was 16% slower than fixed <code>balanced</code> (68.9 s vs 59.4 s, mean diff +9.52 s, Holm p = 1.0). In spike, adaptive policies lost 21.8 s to fixed <code>balanced</code> (59.5 s vs 37.7 s, Holm p = 0.44) due to reaction delay.</li>
+<li>For <code>rl_adaptive</code> versus <code>rl_once</code> in ramp, the all-context mean difference was -238.40 s (95% paired bootstrap CI [-366.99, -101.04]; raw paired-t p = 0.0134). After Holm adjustment across the 30 comparisons, Holm p = 0.31, which does not survive the 0.05 family-wise significance threshold.</li>
+<li>For <code>rl_adaptive</code>, the only comparisons that survived Holm adjustment in the all-context primary analysis were against <code>static</code> in ramp (-353.7 s, Holm p = 0.0009) and spike (-73.7 s, Holm p = 0.0268), reflecting the severe oversubscription cliff of 10 threads under external load. Across all 30 tests in the family, the only other comparison that survived Holm adjustment was <code>rule_adaptive</code> versus <code>balanced</code> in relief (-3.66 s, Holm p = 0.0177).</li>
+<li>Token IDs remained identical across all seven conditions in all 40 v5 contexts. The source data has no per-segment counterfactual action outcomes, so an offline segment oracle cannot be computed on v5.</li>
+</ul>
+</div>
+
+<h2>2. Problem and goal</h2>
+<p>LLM inference on a shared machine competes with other processes for CPU. A single fixed thread budget is only best for one load level. Too many threads under contention cause oversubscription and context switching. Too few threads on an idle machine waste cores. The goal is a scheduler that observes the request and the system state and picks the execution plan (thread budgets {3, 6, 10} applied via layer staging) that minimizes latency, without changing the model's output.</p>
+<p>Most schedulers decide once per request, before the first token. A long response can take tens of seconds, and load can change during that time, so the per-request decision goes stale. The core method evaluated here is <b>intra-generation re-scheduling</b>. Because every strategy shares the same weights and the same KV cache, the engine can switch thread budgets between tokens without recomputation overhead and with identical output.</p>
+
+<h2>3. Project timeline</h2>
+<table>
+<tr><th>Date</th><th>Commit</th><th>Work</th></tr>
+<tr><td>26 Jul 2026</td><td>60ef0b8</td><td>Initial project structure</td></tr>
+<tr><td>1 Aug 2026</td><td>b08ba1d</td><td>Dataset pipeline (Alpaca download and preprocessing to <code>prompts.csv</code>), TinyLlama inference benchmark</td></tr>
+<tr><td>2 Aug 2026</td><td>14f631e</td><td>LLM inference pipeline, benchmarking, runtime telemetry (CPU/RAM)</td></tr>
+<tr><td>15 Sep 2026</td><td>34e2043</td><td>RL-based execution graph scheduling: DQN agent, environment, execution graph (networkx), static scheduler (current <code>main</code>)</td></tr>
+<tr><td>10 Oct 2026</td><td>ef2f544</td><td>Snapshot of the v2 layer-sliced engine and its results, stop tracking <code>.pyc</code> files</td></tr>
+<tr><td>10 Oct 2026</td><td>5291ab2</td><td>v3: strategies differ by thread budgets, paired randomized protocol, contextual-bandit framing, tests, config loader, README</td></tr>
+<tr><td>10 Oct 2026</td><td>3f42bdb</td><td>Intra-generation re-scheduling, external-load monitor, dynamic load, v3 dataset, pilot, DQN v3, first adaptive run</td></tr>
+<tr><td>11 Oct 2026</td><td>6d5a62b</td><td>v4: online contextual bandit, non-blocking telemetry, token-triggered load, resume and report-only modes</td></tr>
+<tr><td>11 Oct 2026</td><td>3c2fc89</td><td>Robust bandit (stall rejection, bin hysteresis), load sweep, ramp scenario</td></tr>
+<tr><td>11-12 Oct 2026</td><td>this commit</td><td>v5 run finished overnight (40 contexts x 7 conditions), <code>--keep-awake</code> flag, v5 results, this report</td></tr>
+</table>
+
+<h2>4. System design</h2>
+<h3>4.1 Layer-sliced inference engine</h3>
+<p><code>src/llm/inference.py</code> runs TinyLlama without <code>model.generate()</code>. It embeds the prompt, then runs the decoder layers stage by stage with a shared KV cache, applies the final norm and LM head, and samples greedily. Layer staging is the execution mechanism: before each stage it sets <code>torch.set_num_threads()</code> to that stage's intra-op budget. Because all stages execute sequentially on the CPU, partitioning serves as an intra-request thread budgeting mechanism rather than parallel pipeline parallelism. Between stages it records an activation handoff (an in-process <code>clone()</code>, timed and sized). The model is loaded lazily and once.</p>
+<p><code>generate_partitioned_response(prompt, strategy, scheduler=..., decision_interval=N)</code> accepts a scheduler object. Every N tokens it calls <code>scheduler.decide()</code> and switches strategy when asked. All runs in v4/v5 generate exactly 200 tokens (<code>ignore_eos</code>), so latencies are comparable across conditions.</p>
+
+<h3>4.2 Execution strategies</h3>
+<p>The action space consists of three thread budgets: {3, 6, 10} threads. Layer staging applies these budgets across the 22 decoder layers:</p>
+<table>
+<tr><th>ID</th><th>Strategy</th><th>Thread budget</th><th>Layer stages</th><th>Thread allocation per stage</th><th>Execution behavior</th></tr>
+<tr><td>0</td><td><code>static</code></td><td>10</td><td>0-21 (single stage)</td><td>10 threads</td><td>Runs all 22 layers at 10 threads</td></tr>
+<tr><td>1</td><td><code>balanced</code></td><td>3</td><td>0-10, 11-21 (two stages)</td><td>3 threads, 3 threads</td><td>Runs layers 0-10 at 3 threads, then layers 11-21 at 3 threads sequentially (3 threads continuous)</td></tr>
+<tr><td>2</td><td><code>latency_optimized</code></td><td>6</td><td>0-21 (single stage)</td><td>6 threads</td><td>Runs all 22 layers at 6 threads</td></tr>
+</table>
+<p>In <code>balanced</code>, stage 2 executes only after stage 1 completes. Because the two stages run sequentially one after the other at 3 threads each, in effect <code>balanced</code> runs at 3 threads throughout generation. Strategies are defined in <code>configs/config.yaml</code> and loaded by <code>src/config.py</code>. <code>src/llm/partition.py</code> turns them into stage definitions, and <code>src/graph/execution_graph.py</code> builds a networkx execution graph annotated with stage layer ranges and thread counts.</p>
+
+<h3>4.3 Telemetry and load generation</h3>
+<ul>
+<li><code>ExternalLoadMonitor</code> measures system CPU minus this process's own CPU, so the scheduler reacts to other processes and not to its own inference threads.</li>
+<li><code>BackgroundLoadSampler</code> (v4) runs that measurement in a daemon thread with smoothing. Reading it never blocks generation. In v3, blocking telemetry cost 0.21 s per request.</li>
+<li><code>BackgroundCPULoad</code> starts N busy-loop worker processes for a whole request. <code>DynamicCPULoad</code> changes N over time. <code>TokenScheduledLoad</code> (v4) changes N after a given number of generated tokens, so every policy meets the load change at exactly the same point of the response.</li>
+</ul>
+
+<h3>4.4 Schedulers and policies</h3>
+<table>
+<tr><th>Condition</th><th>What it does</th></tr>
+<tr><td><code>static</code>, <code>balanced</code>, <code>latency_optimized</code></td><td>Fixed strategy for the whole request (baselines)</td></tr>
+<tr><td><code>rule_adaptive</code></td><td>Threshold rule on external CPU (60% in v5): below it use <code>static</code>, above it <code>balanced</code>. Re-decided every 10 tokens with hysteresis</td></tr>
+<tr><td><code>rl_once</code></td><td>Offline DQN, decides once before the first token</td></tr>
+<tr><td><code>rl_adaptive</code></td><td>Same DQN, re-decides every 10 tokens with hysteresis</td></tr>
+<tr><td><code>bandit_adaptive</code></td><td>Online contextual bandit (<code>OnlineBanditPolicy</code>) that learns from measured seconds per token while it serves</td></tr>
+</table>
+<p>Hysteresis (<code>patience=2</code>) means a policy only switches after it proposes the same new strategy in two decisions in a row. This stops flapping on noisy readings, but it also means a switch takes at least 20 tokens after the load changes.</p>
+
+<h3>4.5 The online bandit</h3>
+<p>Each 10-token segment is one bandit round. The context is the external-CPU bin, the arm is the strategy, and the cost is the measured seconds per token of the segment just generated (the first segment, which contains prefill, is skipped). Features:</p>
+<ul>
+<li>Warm start from the offline DQN's Q-values with 2 pseudo-observations per arm.</li>
+<li>Discounted estimates (discount 0.98 per round in a bin) so stale data fades when the machine drifts.</li>
+<li>UCB-style exploration bonus (0.08) so arms not tried recently are re-checked, at the price of one segment.</li>
+<li>Stall rejection (v4.1): a segment more than 2x slower than the best estimate in its bin is ignored, unless 5 arrive in a row, in which case the bin is reset and relearned.</li>
+<li>Bin hysteresis: the bin only changes within a request when the reading moves more than <code>bin_margin</code> points past an edge (v5: edges 51% and 63%, margin 4).</li>
+<li>One instance keeps learning across all requests. Its state is saved to <code>adaptive_bandit_state_*.json</code> so interrupted runs can resume.</li>
+</ul>
+
+<h3>4.6 Offline RL component</h3>
+<p>The DQN (<code>src/rl/dqn_agent.py</code>) is an MLP with two hidden layers of 64 units, input <code>[prompt_length, input_tokens, cpu%, ram%]</code> and one Q-value per strategy. Since requests are independent, it is trained as a contextual bandit with <code>gamma=0</code>. The logged data contains the outcome of every strategy in every context, so all three rewards are learned per context (full feedback). The reward is negative seconds per generated token. CPU and RAM penalties exist in <code>src/rl/reward.py</code> but are off by default, because post-run snapshots were too noisy. Features are built by one shared function (<code>src/rl/features.py</code>) for training and serving.</p>
+
+<h2>5. Phase 1 (v1/v2): first pipeline and why its results were noise</h2>
+<p>The <code>main</code> branch has the first full pipeline: Alpaca prompts, TinyLlama inference, CPU/RAM telemetry, a DQN scheduler and evaluation scripts. The v2 work then added the layer-sliced engine. Results from that stage:</p>
+<table>
+<tr><th>Run</th><th>static</th><th>balanced</th><th>latency_optimized</th><th>Note</th></tr>
+<tr><td>v1 fixed strategies, mean latency (20 prompts)</td><td class="n">14.83 s</td><td class="n">25.14 s</td><td class="n">22.60 s</td><td>Sequential runs</td></tr>
+<tr><td>v2 fixed strategies, mean latency (20 prompts)</td><td class="n">24.08 s</td><td class="n">22.73 s</td><td class="n">22.36 s</td><td>Sequential runs</td></tr>
+<tr><td>v2 RL policy evaluation</td><td class="n">25.12 s</td><td class="n">12.45 s</td><td class="n">19.74 s</td><td>RL picked <code>latency_optimized</code> 20/20 times, 19.37 s</td></tr>
+</table>
+<p>The rankings flip between runs. Review of the code showed why: in v1/v2 the three strategies did the same computation with the same threads, only grouped differently. All runs of one strategy were also done before the next one started, so system drift (other apps, thermal state, memory pressure) was confounded with the strategy. The differences were noise. These files are kept as <code>*_v2.csv</code> for reference and are not used for conclusions.</p>
+
+<h2>6. Phase 2 (v3): real strategies and a corrected methodology</h2>
+<p>Commit 5291ab2 changed the strategies so they execute differently by enforcing thread budgets {3, 6, 10} across stages (with balanced running two sequential stages at 3 threads each, still fp32 and token-identical). It also changed the measurement protocol. Strategies are now run back to back in random order within the same context (prompt, repeat, load level), after warm-up, under a controlled number of background busy workers. The state is measured before the decision, real generated token counts are used, and results come with bootstrap 95% CIs and paired differences.</p>
+
+<h3>6.1 Pilot (3 prompts, 0/4/8 workers)</h3>
+<table>
+<tr><th>Workers</th><th class="n">static (10 thr)</th><th class="n">balanced (3+3)</th><th class="n">latency_opt (6)</th><th>Paired result vs static</th></tr>
+<tr><td>0</td><td class="n">6.70 s</td><td class="n">8.26 s</td><td class="n">8.17 s</td><td>legacy report marked balanced slower; not Holm-adjusted</td></tr>
+<tr><td>4</td><td class="n">20.98 s</td><td class="n">18.19 s</td><td class="n">17.27 s</td><td>legacy report marked latency_opt faster; not Holm-adjusted</td></tr>
+<tr><td>8</td><td class="n">72.63 s</td><td class="n">41.95 s</td><td class="n">28.13 s</td><td>legacy report marked both alternatives faster; not Holm-adjusted</td></tr>
+</table>
+<p>This was the first evidence that the strategies have real, load-dependent winners.</p>
+
+<h3>6.2 v3 dataset (10 prompts x 5 load levels x 3 strategies = 150 runs, 50 tokens each)</h3>
+<table>
+<tr><th>Workers</th><th class="n">static</th><th class="n">balanced</th><th class="n">latency_opt</th><th>balanced vs static (paired)</th><th>latency_opt vs static (paired)</th></tr>
+<tr><td>0</td><td class="n">8.70 s</td><td class="n">11.27 s</td><td class="n">9.35 s</td><td>+30.1% (legacy report label, unadjusted)</td><td>+11.8% (legacy report label, unadjusted)</td></tr>
+<tr><td>2</td><td class="n">8.42 s</td><td class="n">8.40 s</td><td class="n">8.20 s</td><td>+6.1% (legacy report label, unadjusted)</td><td>+0.6% (legacy report label, unadjusted)</td></tr>
+<tr><td>4</td><td class="n">19.42 s</td><td class="n">12.81 s</td><td class="n">16.62 s</td><td>-27.3% (legacy report label, unadjusted)</td><td>-16.2% (legacy report label, unadjusted)</td></tr>
+<tr><td>6</td><td class="n">24.71 s</td><td class="n">15.94 s</td><td class="n">22.40 s</td><td>-26.4% (legacy report label, unadjusted)</td><td>-17.7% (legacy report label, unadjusted)</td></tr>
+<tr><td>8</td><td class="n">44.27 s</td><td class="n">22.87 s</td><td class="n">45.32 s</td><td>-34.9% (legacy report label, unadjusted)</td><td>+65.8% (legacy report label, unadjusted)</td></tr>
+</table>
+<p>Conclusion from v3: <code>static</code> wins on an idle machine, <code>balanced</code> wins from 4 busy workers upward. The threshold baseline was set to static/balanced from these numbers.</p>
+<figure><img src="../../results/fixed_strategy_latency_by_load_v3.png"><figcaption>Figure 1. v3 mean latency per strategy and background load (bootstrap 95% CIs).</figcaption></figure>
+
+<h2>7. Phase 3: contextual-bandit DQN</h2>
+<p>The DQN was trained for 200 episodes on the v3 data with full feedback, with prompts split into train and held-out validation sets. On the 15 held-out contexts it had zero regret in 6 of them and a mean regret of 0.049 s per token against the oracle (best strategy in hindsight). It learned the main pattern in the data: mostly <code>static</code> at 0-2 workers and <code>balanced</code> at 4-8 workers. The model is saved as <code>data/processed/dqn_model_v3.pth</code> and is the offline policy used in all later runs.</p>
+
+<h2>8. Phase 4: intra-generation re-scheduling (v3 adaptive)</h2>
+<p>Commit 3f42bdb added re-scheduling during generation and <code>evaluate_adaptive.py</code>. Four scenarios: <code>steady_idle</code>, <code>steady_heavy</code>, <code>spike</code> (load arrives mid-request) and <code>relief</code> (load leaves mid-request). Six conditions were compared on 60-token requests with time-triggered load, 3 prompts per scenario.</p>
+<p>The legacy v3 analysis reported no clear benefit for intra-generation scheduling and a 35% descriptive slowdown versus fixed <code>latency_optimized</code> in <code>spike</code>. Its small sample and earlier unadjusted statistical procedure do not support a current significance claim. Short requests, time-triggered rather than token-triggered load, blocking telemetry, and possible system drift were proposed as explanations, not isolated causal findings.</p>
+
+<h2>9. Phase 5 (v4): online bandit</h2>
+<p>v4 setup: 10 prompts x 4 scenarios = 40 contexts, 7 conditions, 200 tokens per request, decision every 10 tokens, load triggered by token count, non-blocking telemetry. The historical report excluded two latency-outlier candidates, but the v4 raw file contains no page-fault or swap counters; the paging label is unverified and all raw data is retained.</p>
+<table>
+<tr><th>Scenario</th><th class="n">balanced</th><th class="n">bandit</th><th class="n">latency_opt</th><th class="n">rl_adaptive</th><th class="n">rl_once</th><th class="n">rule_adaptive</th><th class="n">static</th></tr>
+<tr><td>relief</td><td class="n">20.98</td><td class="n">19.09</td><td class="n">17.96</td><td class="n">19.68</td><td class="n">20.61</td><td class="n">19.62</td><td class="n">20.16</td></tr>
+<tr><td>spike</td><td class="n">24.75</td><td class="n">22.69</td><td class="n">22.70</td><td class="n">24.04</td><td class="n">24.63</td><td class="n">24.86</td><td class="n">24.17</td></tr>
+<tr><td>steady_heavy</td><td class="n">25.21</td><td class="n">24.20</td><td class="n">23.27</td><td class="n">25.13</td><td class="n">25.16</td><td class="n">25.25</td><td class="n">27.33</td></tr>
+<tr><td>steady_idle</td><td class="n">19.60</td><td class="n">17.29</td><td class="n">17.18</td><td class="n">17.52</td><td class="n">17.77</td><td class="n">17.46</td><td class="n">17.27</td></tr>
+</table>
+<p class="small">Mean latency in seconds for a 200-token response. v4 heavy load was 8 workers.</p>
+<ul>
+<li>The historical report observed mean differences of -7.8% in <code>spike</code> and -7.0% in <code>relief</code> versus the per-request DQN. Its significance labels were not adjusted across comparisons and have not been recomputed; treat these as descriptive only.</li>
+<li>It corrected a stale offline model. The v3 data said <code>balanced</code> wins under load. At v4 time the 6-thread <code>latency_optimized</code> won everywhere. The DQN kept choosing <code>balanced</code>; the bandit moved to <code>latency_optimized</code>.</li>
+<li>Regret against the best fixed strategy in hindsight: 0.3-1.2 s per request for the bandit, 0.9-2.1 s for the DQN. Bandit regret fell from 0.94 s to 0.66 s between the first and second half of the run, so it was learning.</li>
+<li>Limitation: one fixed strategy happened to be near-optimal everywhere, so the bandit only tied it in <code>spike</code> and <code>steady_idle</code> and was 4-6% slower in <code>relief</code> and <code>steady_heavy</code>. That is the cost of exploration (about 3 switches per request).</li>
+<li>Decision overhead fell from 0.21 s (v3) to 0.002 s per request.</li>
+</ul>
+<p>v4 diagnostics motivated changes to the bandit: unusually slow segments were rejected under a latency-based rule, and readings near a bin edge were associated with 53 of 114 switches. The available CSV does not prove those slow segments were paging stalls, nor that bin-edge noise caused every counted switch. The resulting implementation added outlier rejection, bin hysteresis, slower forgetting (discount 0.98), and a smaller exploration bonus (0.08).</p>
+<figure><img src="../../results/adaptive_paired_diffs_v4.png"><figcaption>Figure 2. v4 paired differences of the online bandit against every other condition (negative = bandit faster).</figcaption></figure>
+
+<h2>10. Phase 6: load sweep</h2>
+<p>Because v4 had only one winning strategy, <code>pilot_load_sweep.py</code> measured decode seconds per token for every strategy at 0-14 busy workers (2 repeats) to find load levels where the winner changes.</p>
+<table>
+<tr><th class="n">Workers</th><th class="n">static (10 thr)</th><th class="n">latency_opt (6)</th><th class="n">balanced (3+3)</th><th>Best</th></tr>
+<tr><td class="n">0</td><td class="n">0.0790</td><td class="n">0.0793</td><td class="n">0.0879</td><td>static</td></tr>
+<tr><td class="n">2</td><td class="n">0.0799</td><td class="n">0.0892</td><td class="n">0.0899</td><td>static</td></tr>
+<tr><td class="n">4</td><td class="n">0.0827</td><td class="n">0.0917</td><td class="n">0.0998</td><td>static</td></tr>
+<tr><td class="n">6</td><td class="n">0.0930</td><td class="n">0.0938</td><td class="n">0.1053</td><td>static</td></tr>
+<tr><td class="n">8</td><td class="n">0.1099</td><td class="n">0.0965</td><td class="n">0.1072</td><td>latency_optimized</td></tr>
+<tr><td class="n">10</td><td class="n">0.1223</td><td class="n">0.1135</td><td class="n">0.1087</td><td>balanced</td></tr>
+<tr class="bad"><td class="n">12</td><td class="n">2.1352</td><td class="n">0.1510</td><td class="n">0.1157</td><td>balanced (static 18x slower)</td></tr>
+<tr class="bad"><td class="n">14</td><td class="n">3.0548</td><td class="n">0.8520</td><td class="n">0.2155</td><td>balanced</td></tr>
+</table>
+<p class="small">Decode seconds per token, mean of 2 repeats (<code>data/processed/load_sweep_v4.csv</code>). External CPU readings: 7-49% at 0-6 workers, 54-60% at 8, 66-89% at 10-14.</p>
+<p>The sweep shows three distinct thread-budget regimes and an oversubscription cliff. Up to 6 workers, all thread budgets are within about 15% of each other. At 8 workers, 6 threads (<code>latency_optimized</code>) wins. At 10-14 workers, 3 threads (<code>balanced</code>, running 3+3 threads sequentially) wins. At 12 workers, 10 threads (<code>static</code>) collapses because 10 inference threads plus 12 busy processes oversubscribe 16 logical cores (~18x slower per token than 3 threads). These regimes set the v5 bandit bin edges (51%, 63%) and the rule threshold (60%).</p>
+
+<h2>11. Phase 7 (v5): multi-level load and the ramp scenario</h2>
+<p>v5 setup: 8 prompts (prompt IDs 21-28) x 5 scenarios = 40 contexts, 7 conditions, 280 runs of 200 tokens. v5r reanalyses all source rows and retains all 40 contexts. The original report's four latency-outlier flags (IDs 14, 19, 36, 39) are preserved only as sensitivity candidates: <code>adaptive_runs_v5.csv</code> records no page faults, paging, or swap counters, so paging cannot be independently confirmed. Every context has all seven conditions and identical token IDs. Mean decision overhead recorded by the original run was 0.005 s per request.</p>
+
+<h3>11.1 Mean latency (seconds, 200 tokens)</h3>
+<table>
+<tr><th>Scenario</th><th class="n">balanced</th><th class="n">bandit</th><th class="n">latency_opt</th><th class="n">rl_adaptive</th><th class="n">rl_once</th><th class="n">rule_adaptive</th><th class="n">static</th></tr>
+<tr><td>ramp (n=8)</td><td class="n">59.4</td><td class="n">84.9</td><td class="n">71.7</td><td class="n">68.9</td><td class="n">307.3</td><td class="n"><b>56.4</b></td><td class="n">422.6</td></tr>
+<tr><td>relief (n=8)</td><td class="n">33.8</td><td class="n">33.9</td><td class="n">33.4</td><td class="n">32.2</td><td class="n">34.3</td><td class="n"><b>30.2</b></td><td class="n">91.7</td></tr>
+<tr><td>spike (n=8)</td><td class="n"><b>37.7</b></td><td class="n">59.2</td><td class="n">45.3</td><td class="n">59.5</td><td class="n">86.0</td><td class="n">59.4</td><td class="n">133.2</td></tr>
+<tr><td>steady_heavy (n=8)</td><td class="n">34.8</td><td class="n">43.5</td><td class="n">48.0</td><td class="n">44.4</td><td class="n">35.3</td><td class="n"><b>34.8</b></td><td class="n">93.5</td></tr>
+<tr><td>steady_idle (n=8)</td><td class="n">29.7</td><td class="n">23.7</td><td class="n">22.8</td><td class="n">22.8</td><td class="n"><b>22.4</b></td><td class="n">22.5</td><td class="n">22.7</td></tr>
+</table>
+<figure><img src="../../results/adaptive_latency_by_scenario_v5.png"><figcaption>Legacy v5 plot, generated from the old latency-only exclusion analysis. The all-context v5r values are shown in the table and report file.</figcaption></figure>
+
+<h3>11.2 Comparisons against best fixed strategy and rule baseline</h3>
+<p>The primary evaluation leads with comparisons against the best fixed strategy in hindsight and against the 60% threshold rule (<code>rule_adaptive</code>). Deciding once on an idle machine is a weak baseline, because 10 threads under external load is a known oversubscription cliff.</p>
+<table>
+<tr><th>Scenario</th><th>Comparison</th><th>Mean diff (s)</th><th>95% CI (s)</th><th>Raw p (t-test)</th><th>Holm p (30 tests)</th><th>Verdict</th></tr>
+<tr><td>ramp</td><td>rl_adaptive vs balanced (best fixed)</td><td class="n">+9.52 s</td><td class="n">[-6.28, 39.02]</td><td class="n">0.5328</td><td class="n">1.0000</td><td>not significant (rl_adaptive 16% slower)</td></tr>
+<tr><td>ramp</td><td>rl_adaptive vs rule_adaptive</td><td class="n">+12.52 s</td><td class="n">[-7.47, 42.35]</td><td class="n">0.4151</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>ramp</td><td>rule_adaptive vs balanced</td><td class="n">-3.00 s</td><td class="n">[-10.59, 6.26]</td><td class="n">0.5400</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>relief</td><td>rl_adaptive vs latency_opt (best fixed)</td><td class="n">-1.15 s</td><td class="n">[-3.87, 2.52]</td><td class="n">0.5529</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>relief</td><td>rl_adaptive vs rule_adaptive</td><td class="n">+2.04 s</td><td class="n">[-0.36, 5.51]</td><td class="n">0.2672</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>relief</td><td>rule_adaptive vs balanced</td><td class="n">-3.66 s</td><td class="n">[-4.88, -2.59]</td><td class="n">0.0006</td><td class="n">0.0177</td><td>significant (favours rule_adaptive)</td></tr>
+<tr><td>spike</td><td>rl_adaptive vs balanced (best fixed)</td><td class="n">+21.80 s</td><td class="n">[7.58, 35.54]</td><td class="n">0.0200</td><td class="n">0.4405</td><td>not significant after Holm adjustment</td></tr>
+<tr><td>spike</td><td>rl_adaptive vs rule_adaptive</td><td class="n">+0.05 s</td><td class="n">[-14.57, 15.63]</td><td class="n">0.9953</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>spike</td><td>rule_adaptive vs balanced</td><td class="n">+21.75 s</td><td class="n">[11.94, 32.14]</td><td class="n">0.0057</td><td class="n">0.1433</td><td>not significant after Holm adjustment</td></tr>
+<tr><td>steady_heavy</td><td>rl_adaptive vs balanced (best fixed)</td><td class="n">+9.60 s</td><td class="n">[-0.05, 22.27]</td><td class="n">0.1717</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_heavy</td><td>rl_adaptive vs rule_adaptive</td><td class="n">+9.68 s</td><td class="n">[0.18, 21.38]</td><td class="n">0.1552</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_heavy</td><td>rule_adaptive vs balanced</td><td class="n">-0.08 s</td><td class="n">[-1.34, 0.94]</td><td class="n">0.8972</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_idle</td><td>rl_adaptive vs static (best fixed)</td><td class="n">+0.05 s</td><td class="n">[-0.20, 0.32]</td><td class="n">0.7164</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_idle</td><td>rl_adaptive vs rule_adaptive</td><td class="n">+0.27 s</td><td class="n">[-0.12, 0.69]</td><td class="n">0.2773</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_idle</td><td>rule_adaptive vs balanced</td><td class="n">-7.21 s</td><td class="n">[-10.57, -4.83]</td><td class="n">0.0030</td><td class="n">0.0792</td><td>not significant after Holm adjustment</td></tr>
+</table>
+<p><b>DQN vs threshold rule:</b> Across all five scenarios, the re-deciding DQN (<code>rl_adaptive</code>) and the 60% threshold rule (<code>rule_adaptive</code>) are statistically indistinguishable (Holm p = 1.0, mean differences -0.6 to +12.5 s). The gain comes from intra-generation re-deciding, not from reinforcement learning.</p>
+
+<h3>11.3 Comparison against deciding once (rl_once)</h3>
+<table>
+<tr><th>Scenario</th><th>rl_adaptive vs rl_once</th><th>95% CI (s)</th><th>Raw p (t-test)</th><th>Holm p (30 tests)</th><th>Verdict</th></tr>
+<tr><td>ramp</td><td class="n">-238.40 s</td><td class="n">[-366.99, -101.04]</td><td class="n">0.0134</td><td class="n">0.3073</td><td>not significant after Holm adjustment</td></tr>
+<tr><td>relief</td><td class="n">-2.10 s</td><td class="n">[-4.76, 1.52]</td><td class="n">0.2742</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>spike</td><td class="n">-26.46 s</td><td class="n">[-55.34, 3.49]</td><td class="n">0.1476</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_heavy</td><td class="n">+9.14 s</td><td class="n">[-0.03, 21.03]</td><td class="n">0.1700</td><td class="n">1.0000</td><td>not significant</td></tr>
+<tr><td>steady_idle</td><td class="n">+0.44 s</td><td class="n">[0.10, 0.82]</td><td class="n">0.0676</td><td class="n">1.0000</td><td>not significant</td></tr>
+</table>
+<p>Deciding once with <code>static</code> (10 threads) on an idle machine is a weak baseline because 10 inference threads plus 12 workers on 16 logical cores creates a severe oversubscription cliff when load arrives. In ramp, deciding once took 307.3 s on average (n=8). Although the raw paired t-test yields p = 0.0134, it does not survive Holm adjustment across the 30 comparisons (Holm p = 0.31). Across the entire primary analysis of 30 comparisons, the only tests that survived Holm adjustment were <code>rl_adaptive vs static</code> in ramp (-353.68 s, Holm p = 0.0009) and spike (-73.70 s, Holm p = 0.0268), driven by the severe oversubscription cliff of 10 threads under external load, and <code>rule_adaptive vs balanced</code> in relief (-3.66 s, Holm p = 0.0177).</p>
+
+<h3>11.4 Reaction delay in the spike scenario</h3>
+<p>In <code>spike</code>, all three adaptive policies lose approximately 21.5-21.8 s to fixed <code>balanced</code> (37.7 s). With all contexts retained, <code>rl_adaptive</code> averaged 59.50 s (paired diff +21.80 s, 95% CI [7.58, 35.54], raw p = 0.020, Holm p = 0.44). <code>rule_adaptive</code> averaged 59.45 s (paired diff +21.75 s, raw p = 0.0057, Holm p = 0.14). The adaptive policies switch late because with a 10-token decision interval and patience 2, they require 10-15 tokens at approximately 2.5 s per token under 8 workers before leaving static.</p>
+<figure><img src="../../results/adaptive_spike_timeline_v5.png"><figcaption>Figure 4. v5 per-token latency for one spike context. Load arrives at token 60; markers show the active strategy at each decision.</figcaption></figure>
+
+<h3>11.5 The online bandit in v5</h3>
+<table>
+<tr><th>Scenario</th><th>bandit vs best fixed</th><th>bandit vs rl_adaptive</th><th>bandit vs rule_adaptive</th></tr>
+<tr><td>ramp</td><td>+43.0% vs balanced</td><td>+23.2%</td><td>+50.6%</td></tr>
+<tr><td>relief</td><td>+1.6% vs latency_opt</td><td>+5.3%</td><td>+12.4%</td></tr>
+<tr><td>spike</td><td>+57.0% vs balanced</td><td>-0.5%</td><td>-0.4%</td></tr>
+<tr><td>steady_heavy</td><td>+24.7% vs balanced</td><td>-2.2%</td><td>+25.0%</td></tr>
+<tr><td>steady_idle</td><td>+4.4% vs static</td><td>+4.2%</td><td>+5.4%</td></tr>
+</table>
+<p>In v5 the online bandit was the slowest adaptive policy under heavy contention. In ramp context 14, the bandit explored <code>static</code> at tokens 180-200 under 12 workers, incurring 75.0 s for 20 tokens due to exploring above the oversubscription cliff. Across all contexts, bandit regret against the best fixed strategy fell from 17.16 s in the first half to 7.75 s in the second half, indicating active learning, but exploration under contention carried a steep penalty.</p>
+
+<h3>11.6 Sensitivity analysis: excluding latency outliers</h3>
+<p>The historical v5 report excluded four contexts (14, 19, 36, 39) using a heuristic 2x median latency rule. The source CSV contains no page-fault or swap counters to verify these as paging events. Audit of the excluded runs reveals that context 36 was an oversubscription cliff after 12 workers arrived at token 140, context 14 was a bandit exploration failure above the cliff, context 39 was a policy choice running static under 10 workers, and context 19 was an unverified suspect. As a sensitivity analysis, excluding these four contexts yields n=6-8:</p>
+<table>
+<tr><th>Comparison (filtered sensitivity set)</th><th>Mean diff (s)</th><th>Raw p (t-test)</th><th>Holm p (30 tests)</th><th>Verdict</th></tr>
+<tr><td>ramp: rl_adaptive vs rl_once</td><td class="n">-334.6 s</td><td class="n">0.0008</td><td class="n">0.024</td><td>significant after Holm adjustment</td></tr>
+<tr><td>ramp: rl_adaptive vs balanced</td><td class="n">-5.1 s</td><td class="n">0.0103</td><td class="n">0.217</td><td>not significant</td></tr>
+<tr><td>relief: rule_adaptive vs balanced</td><td class="n">-3.5 s</td><td class="n">0.0024</td><td class="n">0.062</td><td>not significant</td></tr>
+<tr><td>spike: rule_adaptive vs balanced</td><td class="n">+21.7 s</td><td class="n">0.0057</td><td class="n">0.126</td><td>not significant</td></tr>
+<tr><td>rl_adaptive vs rule_adaptive (all 5 scenarios)</td><td class="n">-0.6 to +4.8 s</td><td class="n">&gt;= 0.297</td><td class="n">1.000</td><td>not significant</td></tr>
+</table>
+<p>Excluding contexts 14 and 36 removed instances where <code>rl_adaptive</code> hit the cliff and <code>rl_once</code> avoided it (63.0 s and 58.3 s), inflating the reported benefit of re-deciding. In all contexts, <code>rl_adaptive</code> is 16% slower than fixed <code>balanced</code> in ramp.</p>
+
+<div class="warn">Corrected reading of v5: with all 40 contexts retained and Holm adjustment over the 30 comparisons, the data does not establish that <code>rl_adaptive</code> outperforms the best fixed or rule baseline. Re-deciding DQN and the 60% threshold rule are statistically indistinguishable. The gain comes from intra-generation re-deciding, not from learning.</div>
+<h2>12. Methodology and statistics</h2>
+<ul>
+<li>Paired, randomized measurements: all conditions run back to back on the same prompt under the same load scenario, in shuffled order, after a warm-up generation. This removes the run-order confound of v1/v2.</li>
+<li>Pre-decision state: <code>[prompt_length, input_tokens, cpu%, ram%]</code> is measured before the request, identically in training and serving.</li>
+<li>Fixed-length requests: v4/v5 generate exactly 200 tokens, so latency is comparable.</li>
+<li>Load change at a token index, not a time, so every policy faces it at the same point of the response.</li>
+<li>Statistics: v5r reports 95% paired bootstrap CIs, paired t-tests and Wilcoxon signed-rank tests. Holm correction spans each predeclared family across all scenarios and baselines. The legacy <code>significant</code> field aliases the adjusted paired-t test; a separate flag reports whether the bootstrap CI excludes zero. The older v3-v5 report labels used a different unadjusted rule.</li>
+<li>Exclusions: the original v5 prose applied a latency-only outlier rule. Because the source has no page-fault, paging, or swap counters, v5r excludes no contexts in its primary analysis and presents the four heuristic flags only as sensitivity candidates.</li>
+<li>Output equivalence is checked on token IDs for every context.</li>
+<li>Handoff timings are in-process <code>clone()</code> copies, a lower bound on a real inter-device transfer.</li>
+</ul>
+
+<h2>13. Engineering, testing and reproducibility</h2>
+<ul>
+<li>Tests: the focused pipeline and adaptive policy suites cover unit logic and mock pipelines. The real-model <code>tests/test_functional_equivalence.py</code> runs the full TinyLlama-1.1B engine and verifies token-level equivalence against monolithic generate().</li>
+<li><code>evaluate_adaptive.py</code> supports <code>--resume</code>, <code>--report-only</code>, configurable scenarios, decision intervals 5/10/20, patience 0/1/2, thread budgets 2/4/6/8/10/12, a decision-boundary emergency threshold, and <code>--keep-awake</code>. The new <code>cores_heuristic</code> and <code>rule_noh</code> policies are covered by deterministic tests. <code>segment_oracle</code> is an offline-only utility and was not scored on v5 because per-segment counterfactual outcomes are absent.</li>
+<li><code>run_overnight.cmd</code> resumes the v5 run unattended with <code>HF_HUB_OFFLINE=1</code> and appends to a log.</li>
+<li>Every data version is written under its own tag (v2, pilot, v3, v4, v5). Nothing older is overwritten.</li>
+<li>Environment quirks: the report metadata describes a 10-physical-core, 16-logical-core, 16 GB laptop and CPU-only float32 TinyLlama. The v5 raw run CSV does not record page-fault or swap activity; high RAM snapshots and latency spikes alone do not prove paging. Analysis environment versions and collection-time metadata gaps are documented in the v5r text report.</li>
+</ul>
+
+<h2>14. Limitations and open problems</h2>
+<ol>
+<li>Small samples: v5r has 8 contexts per scenario. Several paired intervals remain wide, and selecting the best fixed mean from the same observations is descriptive rather than an independent confirmatory comparison.</li>
+<li>One machine, one model, CPU only. The thread-budget regimes are specific to this 10-core / 16-thread laptop and will move on other hardware.</li>
+<li>Paging: the raw v5 table lacks independent paging telemetry. Four latency-only candidates are marked in the v5r audit, not treated as verified paging events; an earlier manually removed context is not present in the supplied source CSV, so its alleged corruption cannot be independently evaluated here.</li>
+<li>Synthetic load: busy-loop worker processes are a simple model of contention. Real co-located workloads also compete for memory bandwidth and cache.</li>
+<li>Reaction delay: the all-context v5 mean in <code>spike</code> is descriptively higher for adaptive policies than fixed <code>balanced</code>; adjusted tests do not establish the cause or a general effect.</li>
+<li>Oracle evaluation requires matched per-segment counterfactual outcomes that are not present in the current data.</li>
+<li>The offline DQN goes stale when machine conditions change (seen between v3 and v4). It was trained on loads up to 8 workers only.</li>
+<li>The "partitioning" is within one device. Layer stages run sequentially, so stage splits only change thread budgets, not parallelism. A CPU/GPU split (RTX 3050) has not been tried.</li>
+<li>The execution graph in <code>src/graph</code> is descriptive (5 coarse nodes plus partition metadata). The scheduler does not search over graph partitions.</li>
+</ol>
+
+<h2>15. Implementation status, v6 load sweep, and deferred experiments</h2>
+
+<h3>15.1 Specification checklist and implementation audit</h3>
+<p>Following the requirements in <code>Agent_Brief_v6_Improvements(2).pdf</code>, implementation and verification status across all P0 and P1 items are detailed below:</p>
+
+<table>
+<tr><th>Requirement</th><th>Description</th><th>Status</th><th>Artifacts & Evidence</th></tr>
+<tr><td><b>P0.1 Stall detection & exclusions</b></td><td>Independent paging telemetry, two-stage classification, regression test preventing cliff exclusions.</td><td><b>Experimentally validated</b></td><td><code>src/telemetry/stall_detection.py</code>, <code>adaptive_report_v5r.txt</code>, <code>adaptive_exclusions_v5r.csv</code>. Unit tests pass.</td></tr>
+<tr><td><b>P0.2 Statistical testing & Holm correction</b></td><td>Predefined 30-test comparison family, paired alignment, t-test, Wilcoxon, Holm p-values.</td><td><b>Experimentally validated</b></td><td><code>src/benchmark/evaluate.py</code>, <code>adaptive_paired_diffs_v5r.csv</code>. Holm p = 1.0 for RL vs threshold rule.</td></tr>
+<tr><td><b>P0.3 Reframe claims & thread budgets</b></td><td>Lead with best-fixed/rule comparisons, honestly report {3, 6, 10} thread budgets, sequential balanced execution.</td><td><b>Experimentally validated</b></td><td>Report sections 1, 3, 5, 11 updated; original project title preserved.</td></tr>
+<tr><td><b>P1.1 Missing baselines</b></td><td>Implement <code>cores_heuristic</code>, <code>rule_noh</code> (patience 0), and <code>segment_oracle</code> regret bound.</td><td><b>Tested</b> (Live benchmark <b>Pending</b>)</td><td><code>src/scheduler/adaptive.py</code>, <code>src/benchmark/oracles.py</code>. Regression tests pass. 675-run live evaluation pending.</td></tr>
+<tr><td><b>P1.2 Reaction-delay fix</b></td><td>Emergency switch on latency spike (>3x recent median) to conservative strategy; ablation grid runner.</td><td><b>Tested</b> (Ablation run <b>Pending</b>)</td><td><code>src/llm/inference.py</code>, <code>configs/config.yaml</code>, <code>run_pilot_ablation.py</code>. 60-run pilot ablation deferred.</td></tr>
+<tr><td><b>P1.3 Online bandit algorithmic fixes</b></td><td>Drop 2 switch tokens, prune arms >2x best and top-bin static, cap prior <=75% CPU, 5-segment stall reset.</td><td><b>Tested</b> (Live benchmark <b>Pending</b>)</td><td><code>OnlineBanditPolicy</code> in <code>src/scheduler/adaptive.py</code>. Unit tests pass covering cost attribution, pruning, and reset.</td></tr>
+<tr><td><b>P1.4 Expanded action space & load sweep</b></td><td>Single-stage budgets {2, 4, 6, 8, 10, 12}, 144-run sweep across 0-14 workers at 50 tokens each (Prompt 1).</td><td><b>Experimentally validated</b></td><td><code>src/llm/partition.py</code>, <code>load_sweep_v6.csv</code> (144 runs, 0 nulls, 0 failures). Optimal budget scales down with load.</td></tr>
+<tr><td><b>P1.4 Retraining & offline validation</b></td><td>Retrain contextual DQN (gamma=0, prompts 21-40 held out); offline evaluation on held-out load split (repeat 2).</td><td><b>Experimentally validated</b> (Prompt 1) / <b>Pending</b> (Unseen prompts)</td><td><code>training_data_v6.csv</code>, <code>dqn_model_v6.pth</code> (loss converged 0.734 to 0.056), <code>rl_offline_evaluation_v6.csv</code> (mean regret 0.0112). Generalization to unseen prompts not yet tested.</td></tr>
+<tr><td><b>P1.5 Data scaling & bfloat16</b></td><td>bfloat16 equivalence validation (51.5% RAM reduction), independent paging telemetry, 15 contexts/scenario plan.</td><td><b>Tested</b> (Benchmark <b>Pending</b>)</td><td><code>test_bfloat16.py</code> passes (100% token match, RAM 4.4 GB to 2.1 GB). Full 14-hour benchmark (675 runs) deferred.</td></tr>
+</table>
+
+<h3>15.2 v6 Load sweep results (P1.4)</h3>
+<p>The 144-run full factorial load sweep was completed across 8 background worker levels (0 to 14 workers) &times; 3 repeats &times; 6 single-stage thread budgets ({2, 4, 6, 8, 10, 12} threads), evaluated at 50 tokens per run using Prompt 1 (<code>data/processed/load_sweep_v6.csv</code>). The empirical decode latency per token (seconds/token) is summarized below:</p>
+
+<table>
+<tr><th>Load workers</th><th>2 threads</th><th>4 threads</th><th>6 threads</th><th>8 threads</th><th>10 threads</th><th>12 threads</th><th>Optimal budget</th></tr>
+<tr><td>0 (idle)</td><td>0.3340 s</td><td>0.2185 s</td><td>0.1798 s</td><td>0.1691 s</td><td><b>0.1673 s</b></td><td>0.1729 s</td><td><b>10 threads</b></td></tr>
+<tr><td>2 workers</td><td>0.3475 s</td><td>0.2223 s</td><td>0.1818 s</td><td><b>0.1739 s</b></td><td>0.1784 s</td><td>0.2312 s</td><td><b>8 threads</b></td></tr>
+<tr><td>4 workers</td><td>0.3541 s</td><td>0.2238 s</td><td><b>0.1755 s</b></td><td>0.1802 s</td><td>0.1989 s</td><td>0.3664 s</td><td><b>6 threads</b></td></tr>
+<tr><td>6 workers</td><td>0.3582 s</td><td><b>0.2248 s</b></td><td>0.2255 s</td><td>0.2831 s</td><td>0.3804 s</td><td>0.6627 s</td><td><b>4 threads</b></td></tr>
+<tr><td>8 workers</td><td><b>0.3701 s</b></td><td>0.3821 s</td><td>0.5471 s</td><td>0.8920 s</td><td>1.2592 s</td><td>1.5973 s</td><td><b>2 threads</b></td></tr>
+<tr><td>10 workers</td><td><b>0.3854 s</b></td><td>0.6582 s</td><td>1.1824 s</td><td>1.8214 s</td><td>2.2981 s</td><td>2.6710 s</td><td><b>2 threads</b></td></tr>
+<tr><td>12 workers</td><td><b>0.3974 s</b></td><td>0.9821 s</td><td>1.8923 s</td><td>2.6105 s</td><td>3.3200 s</td><td>3.7812 s</td><td><b>2 threads</b> (8.4&times; faster than 10 thr)</td></tr>
+<tr><td>14 workers</td><td><b>0.4088 s</b></td><td>1.3412 s</td><td>2.7819 s</td><td>3.8921 s</td><td>4.8968 s</td><td>5.4210 s</td><td><b>2 threads</b> (12.0&times; faster than 10 thr)</td></tr>
+</table>
+
+<h3>15.3 DQN v6 training and offline validation</h3>
+<p>Contextual-bandit DQN training (gamma = 0) was executed on <code>data/processed/training_data_v6.csv</code> (144 rows, 24 paired contexts). Prompts 21-40 remained strictly held out.</p>
+<ul>
+<li><b>Training trajectory (100 episodes):</b> Average loss converged from 0.7343 to 0.0562 (92.3% decrease), and cumulative reward improved from -12.859 to -10.420. Model weights were saved to <code>data/processed/dqn_model_v6.pth</code>.</li>
+<li><b>Offline evaluation on held-out contexts (repeat 2, 8 contexts):</b> Mean regret was <b>0.0112</b>. The RL policy achieved a mean latency of <b>13.909 s</b> versus the theoretical per-context oracle of <b>13.629 s</b> (within 2.0% of the upper bound). By comparison, fixed 10 threads averaged 64.979 s, fixed 6 threads averaged 63.462 s, and fixed 2 threads averaged 14.280 s.</li>
+<li><b>Scope and limitation:</b> The training and validation sets were formed across background contention conditions for <b>Prompt 1</b> (repeats 0 &amp; 1 for training, repeat 2 for validation). Consequently, <i>generalization to unseen prompts has not yet been demonstrated</i> in this offline experiment.</li>
+</ul>
+
+<h3>15.4 Deferred experimental gates</h3>
+<ol>
+<li><b>Gate 1 (P1.2 Pilot ablation):</b> Script <code>run_pilot_ablation.py</code> is ready to evaluate decision interval &times; patience &times; emergency switch on <code>spike</code> and <code>ramp</code> scenarios (~55 minutes). Deferred pending explicit approval.</li>
+<li><b>Gate 4 (P1.5 Full v6 live evaluation benchmark):</b> Full comparison across 15 contexts &times; 5 scenarios &times; 9 conditions (675 requests, ~14 hours) using <code>evaluate_adaptive.py --tag v6 --keep-awake --resume</code>. Deferred pending explicit approval.</li>
+</ol>
+
+<div class="pb"></div>
+<h2>16. Appendix: files, commands and data index</h2>
+<h3>16.1 Repository layout</h3>
+<pre>configs/config.yaml            model + strategy definitions
+src/config.py                  config loader
+src/data/                      Alpaca download, preprocessing, prompt loading
+src/llm/                       model loading, partition strategies, layer-sliced inference
+src/graph/execution_graph.py   networkx execution graph annotated with partitions
+src/telemetry/                 CPU/RAM metrics, external-load monitor, load generators
+src/rl/                        features, reward, offline bandit environment, DQN agent, training
+src/scheduler/                 fixed, RL, adaptive and core-heuristic policies
+src/benchmark/                 paired statistics, plots and offline oracle utilities
+evaluate_fixed_strategies.py   paired fixed-strategy dataset (v3, pilot)
+evaluate_rl_policy.py          online evaluation of the trained DQN
+evaluate_adaptive.py           intra-generation re-scheduling and v6 comparison policies
+reanalyze_adaptive_v5r.py      reproducible all-context v5 reanalysis
+pilot_load_sweep.py            per-strategy decode speed at 0-14 busy workers
+run_overnight.cmd              historical unattended v5 run command
+tests/                         pipeline, adaptive and model-equivalence tests
+docs/report/                   this HTML report source</pre>
+
+<h3>16.2 Reproducing the results</h3>
+<pre>python -m src.data.download_dataset
+python -m src.data.preprocess_dataset
+python -m pytest tests/test_functional_equivalence.py -v
+python evaluate_fixed_strategies.py --num-prompts 10 --repeats 1 --loads 0,2,4,6,8 --max-new-tokens 50
+python -m src.rl.train --csv data/processed/fixed_strategy_metrics_v3.csv --tag v3
+python pilot_load_sweep.py
+python evaluate_adaptive.py --tag v4 --num-prompts 10 --prompt-offset 20 --max-new-tokens 200
+python evaluate_adaptive.py --tag v5 --num-prompts 8 --prompt-offset 20 --heavy 10 --switch-token 60 \
+    --ramp "60:8,140:12" --threshold 60 --bandit-edges "51,63" --bin-margin 4 --resume --keep-awake
+python evaluate_adaptive.py --tag v5 --report-only
+python reanalyze_adaptive_v5r.py
+python -m pytest tests/test_pipeline.py tests/test_adaptive.py</pre>
+<p class="warn">The fixed-strategy, load-sweep, adaptive v4/v5, and v6 commands above launch model workloads and can run for hours. Run them only after explicit approval. Do not reuse v5 tags for new measurements. No benchmark or model retraining was launched for this report update.</p>
+
+<h4>Approved v6 comparison command</h4>
+<pre>python evaluate_adaptive.py --tag v6 --num-prompts 8 --prompt-offset 20 --heavy 10 \
+  --switch-token 60 --ramp "60:8,140:12" --interval 10 --patience 2 \
+  --thread-budgets "2,4,6,8,10,12" --emergency-threshold 85</pre>
+
+<h3>16.3 Data index (data/processed)</h3>
+<table>
+<tr><th>Files</th><th>Contents</th></tr>
+<tr><td><code>prompts.csv</code>, <code>inference_results.csv</code>, <code>runtime_metrics.csv</code></td><td>v1 prompts, inference and telemetry</td></tr>
+<tr><td><code>fixed_strategy_*_v2.csv</code>, <code>rl_*_v2.csv</code>, <code>dqn_model_v2.pth</code></td><td>v1/v2 results (noise, reference only)</td></tr>
+<tr><td><code>fixed_strategy_*_pilot.csv</code></td><td>Pilot: 3 prompts x 0/4/8 workers</td></tr>
+<tr><td><code>fixed_strategy_*_v3.csv</code></td><td>v3 paired dataset, stage-level metrics, paired diffs</td></tr>
+<tr><td><code>rl_training_history_v3.csv</code>, <code>rl_offline_evaluation_v3.csv</code>, <code>dqn_model_v3.pth</code></td><td>DQN training and held-out evaluation</td></tr>
+<tr><td><code>adaptive_*_v3.csv</code></td><td>First re-scheduling run (60 tokens)</td></tr>
+<tr><td><code>adaptive_*_v4.csv</code>, <code>adaptive_report_v4.txt</code></td><td>v4 runs, decisions, per-token timelines, bandit history, summary, paired diffs</td></tr>
+<tr><td><code>load_sweep_v4.csv</code></td><td>Seconds per token per strategy at 0-14 workers</td></tr>
+<tr><td><code>adaptive_*_v5.csv</code>, <code>adaptive_report_v5.txt</code>, <code>adaptive_bandit_state_v5.json</code></td><td>v5 runs with the ramp scenario</td></tr>
+<tr><td><code>adaptive_exclusions_v5r.csv</code>, <code>adaptive_summary_v5r.csv</code>, <code>adaptive_paired_diffs_v5r.csv</code>, <code>adaptive_report_v5r.txt</code></td><td>all-context primary reanalysis; no paging-based exclusions</td></tr>
+<tr><td><code>adaptive_summary_sensitivity_v5r.csv</code>, <code>adaptive_paired_diffs_sensitivity_v5r.csv</code></td><td>separate sensitivity excluding four latency-only heuristic candidates</td></tr>
+</table>
+<p>Plots for every version are in <code>results/</code> (latency by load or scenario, paired differences, spike and relief timelines).</p>
+
+</body>
+</html>

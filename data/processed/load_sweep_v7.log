@@ -1,0 +1,414 @@
+LOAD SWEEP v7: 288 runs, 0 done, commit 3e3b13b4f7
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  35%|###5      | 71/201 [00:00<00:00, 681.30it/s]Loading weights:  70%|######9   | 140/201 [00:00<00:00, 509.12it/s]Loading weights:  97%|#########6| 194/201 [00:00<00:00, 322.14it/s]Loading weights: 100%|##########| 201/201 [00:00<00:00, 356.54it/s]
+Model loaded successfully!
+[001/288] p1 r0 w00 threads_6  0.0818 s/tok cpu 28.11 ram 79.0% | ETA 0.5 h
+[002/288] p1 r0 w00 balanced   0.0986 s/tok cpu 26.05 ram 78.9% | ETA 0.4 h
+[003/288] p1 r0 w00 threads_4  0.0823 s/tok cpu 7.27 ram 78.1% | ETA 0.4 h
+[004/288] p1 r0 w00 threads_2  0.0974 s/tok cpu 12.87 ram 78.0% | ETA 0.4 h
+[005/288] p1 r0 w00 threads_3  0.1026 s/tok cpu 29.48 ram 78.1% | ETA 0.4 h
+[006/288] p1 r0 w00 threads_10 0.0820 s/tok cpu 18.57 ram 78.3% | ETA 0.4 h
+[007/288] p1 r0 w12 threads_4  0.1612 s/tok cpu 85.17 ram 79.1% | ETA 0.5 h
+[008/288] p1 r0 w12 balanced   0.1152 s/tok cpu 77.65 ram 79.3% | ETA 0.5 h
+[009/288] p1 r0 w12 threads_2  0.1253 s/tok cpu 78.26 ram 79.3% | ETA 0.5 h
+[010/288] p1 r0 w12 threads_6  0.1375 s/tok cpu 78.6 ram 79.3% | ETA 0.5 h
+[011/288] p1 r0 w12 threads_3  0.1173 s/tok cpu 79.16 ram 79.2% | ETA 0.5 h
+[012/288] p1 r0 w12 threads_10 1.9935 s/tok cpu 83.74 ram 79.4% | ETA 0.8 h
+[013/288] p1 r0 w14 threads_4  0.2070 s/tok cpu 91.38 ram 79.9% | ETA 0.8 h
+[014/288] p1 r0 w14 threads_3  0.1897 s/tok cpu 89.4 ram 80.3% | ETA 0.8 h
+[015/288] p1 r0 w14 threads_6  1.7773 s/tok cpu 91.37 ram 78.9% | ETA 1.1 h
+[016/288] p1 r0 w14 threads_2  0.1673 s/tok cpu 91.25 ram 78.7% | ETA 1.1 h
+[017/288] p1 r0 w14 balanced   0.2579 s/tok cpu 89.27 ram 79.4% | ETA 1.1 h
+[018/288] p1 r0 w14 threads_10 3.1126 s/tok cpu 89.13 ram 79.6% | ETA 1.4 h
+[019/288] p1 r0 w08 balanced   0.1192 s/tok cpu 71.14 ram 80.5% | ETA 1.4 h
+[020/288] p1 r0 w08 threads_6  0.0956 s/tok cpu 55.08 ram 80.5% | ETA 1.3 h
+[021/288] p1 r0 w08 threads_2  0.1181 s/tok cpu 55.24 ram 80.4% | ETA 1.3 h
+[022/288] p1 r0 w08 threads_4  0.1009 s/tok cpu 54.04 ram 79.3% | ETA 1.2 h
+[023/288] p1 r0 w08 threads_3  0.1139 s/tok cpu 63.23 ram 79.5% | ETA 1.2 h
+[024/288] p1 r0 w08 threads_10 0.1168 s/tok cpu 57.25 ram 79.9% | ETA 1.1 h
+[025/288] p1 r0 w10 threads_2  0.1158 s/tok cpu 64.58 ram 79.9% | ETA 1.1 h
+[026/288] p1 r0 w10 threads_10 0.1297 s/tok cpu 66.98 ram 79.9% | ETA 1.1 h
+[027/288] p1 r0 w10 threads_3  0.1072 s/tok cpu 66.39 ram 79.9% | ETA 1.1 h
+[028/288] p1 r0 w10 threads_6  0.1097 s/tok cpu 65.79 ram 79.9% | ETA 1.0 h
+[029/288] p1 r0 w10 balanced   0.1066 s/tok cpu 65.82 ram 79.9% | ETA 1.0 h
+[030/288] p1 r0 w10 threads_4  0.1023 s/tok cpu 64.56 ram 79.9% | ETA 1.0 h
+[031/288] p1 r0 w11 threads_2  0.1180 s/tok cpu 71.55 ram 80.0% | ETA 1.0 h
+[032/288] p1 r0 w11 threads_10 1.3213 s/tok cpu 74.17 ram 80.0% | ETA 1.0 h
+[033/288] p1 r0 w11 balanced   0.1065 s/tok cpu 71.41 ram 79.9% | ETA 1.0 h
+[034/288] p1 r0 w11 threads_6  0.1260 s/tok cpu 72.63 ram 79.8% | ETA 1.0 h
+[035/288] p1 r0 w11 threads_4  0.1026 s/tok cpu 70.99 ram 79.9% | ETA 0.9 h
+[036/288] p1 r0 w11 threads_3  0.1070 s/tok cpu 71.72 ram 79.9% | ETA 0.9 h
+[037/288] p1 r0 w04 threads_4  0.0948 s/tok cpu 31.45 ram 78.7% | ETA 0.9 h
+[038/288] p1 r0 w04 threads_2  0.0993 s/tok cpu 31.47 ram 78.7% | ETA 0.9 h
+[039/288] p1 r0 w04 threads_10 0.0797 s/tok cpu 27.33 ram 78.7% | ETA 0.9 h
+[040/288] p1 r0 w04 balanced   0.0982 s/tok cpu 29.09 ram 78.7% | ETA 0.8 h
+[041/288] p1 r0 w04 threads_3  0.0972 s/tok cpu 30.87 ram 78.5% | ETA 0.8 h
+[042/288] p1 r0 w04 threads_6  0.0919 s/tok cpu 29.72 ram 78.4% | ETA 0.8 h
+[043/288] p1 r0 w09 threads_10 0.1068 s/tok cpu 62.6 ram 77.8% | ETA 0.8 h
+[044/288] p1 r0 w09 balanced   0.1057 s/tok cpu 58.62 ram 77.8% | ETA 0.8 h
+[045/288] p1 r0 w09 threads_3  0.1032 s/tok cpu 59.64 ram 77.8% | ETA 0.8 h
+[046/288] p1 r0 w09 threads_2  0.1156 s/tok cpu 59.38 ram 77.8% | ETA 0.8 h
+[047/288] p1 r0 w09 threads_4  0.1014 s/tok cpu 59.17 ram 77.8% | ETA 0.7 h
+[048/288] p1 r0 w09 threads_6  0.0963 s/tok cpu 60.18 ram 77.8% | ETA 0.7 h
+[049/288] p1 r1 w12 threads_2  0.1183 s/tok cpu 77.25 ram 78.1% | ETA 0.7 h
+[050/288] p1 r1 w12 balanced   0.1090 s/tok cpu 77.45 ram 78.1% | ETA 0.7 h
+[051/288] p1 r1 w12 threads_6  0.1374 s/tok cpu 77.55 ram 78.0% | ETA 0.7 h
+[052/288] p1 r1 w12 threads_3  0.1085 s/tok cpu 76.79 ram 78.1% | ETA 0.7 h
+[053/288] p1 r1 w12 threads_4  0.1233 s/tok cpu 76.94 ram 78.1% | ETA 0.7 h
+[054/288] p1 r1 w12 threads_10 0.2159 s/tok cpu 77.18 ram 78.1% | ETA 0.7 h
+[055/288] p1 r1 w11 threads_6  0.1311 s/tok cpu 71.82 ram 78.2% | ETA 0.7 h
+[056/288] p1 r1 w11 threads_3  0.1068 s/tok cpu 71.75 ram 78.2% | ETA 0.7 h
+[057/288] p1 r1 w11 threads_4  0.1032 s/tok cpu 70.47 ram 78.1% | ETA 0.7 h
+[058/288] p1 r1 w11 threads_10 0.1331 s/tok cpu 73.24 ram 78.1% | ETA 0.7 h
+[059/288] p1 r1 w11 threads_2  0.1173 s/tok cpu 71.08 ram 78.0% | ETA 0.7 h
+[060/288] p1 r1 w11 balanced   0.1065 s/tok cpu 71.53 ram 78.0% | ETA 0.7 h
+[061/288] p1 r1 w04 balanced   0.0978 s/tok cpu 33.46 ram 77.9% | ETA 0.7 h
+[062/288] p1 r1 w04 threads_4  0.0959 s/tok cpu 31.05 ram 77.8% | ETA 0.6 h
+[063/288] p1 r1 w04 threads_10 0.0804 s/tok cpu 27.11 ram 77.8% | ETA 0.6 h
+[064/288] p1 r1 w04 threads_3  0.0951 s/tok cpu 28.28 ram 77.8% | ETA 0.6 h
+[065/288] p1 r1 w04 threads_2  0.0970 s/tok cpu 28.85 ram 77.9% | ETA 0.6 h
+[066/288] p1 r1 w04 threads_6  0.0897 s/tok cpu 28.8 ram 77.8% | ETA 0.6 h
+[067/288] p1 r1 w09 threads_2  0.1146 s/tok cpu 58.34 ram 78.1% | ETA 0.6 h
+[068/288] p1 r1 w09 threads_3  0.1055 s/tok cpu 59.95 ram 78.1% | ETA 0.6 h
+[069/288] p1 r1 w09 threads_4  0.1017 s/tok cpu 59.2 ram 78.1% | ETA 0.6 h
+[070/288] p1 r1 w09 balanced   0.1064 s/tok cpu 60.35 ram 78.1% | ETA 0.6 h
+[071/288] p1 r1 w09 threads_10 0.1105 s/tok cpu 60.75 ram 78.1% | ETA 0.6 h
+[072/288] p1 r1 w09 threads_6  0.0976 s/tok cpu 61.26 ram 78.1% | ETA 0.6 h
+[073/288] p1 r1 w00 threads_3  0.0889 s/tok cpu 8.83 ram 77.8% | ETA 0.6 h
+[074/288] p1 r1 w00 threads_4  0.0813 s/tok cpu 7.9 ram 77.9% | ETA 0.6 h
+[075/288] p1 r1 w00 threads_6  0.0728 s/tok cpu 4.6 ram 77.9% | ETA 0.6 h
+[076/288] p1 r1 w00 balanced   0.0870 s/tok cpu 5.44 ram 77.9% | ETA 0.5 h
+[077/288] p1 r1 w00 threads_10 0.0785 s/tok cpu 12.12 ram 77.9% | ETA 0.5 h
+[078/288] p1 r1 w00 threads_2  0.0952 s/tok cpu 12.26 ram 78.0% | ETA 0.5 h
+[079/288] p1 r1 w08 threads_3  0.1052 s/tok cpu 55.48 ram 78.4% | ETA 0.5 h
+[080/288] p1 r1 w08 threads_4  0.1014 s/tok cpu 54.78 ram 78.5% | ETA 0.5 h
+[081/288] p1 r1 w08 threads_10 0.1133 s/tok cpu 53.7 ram 78.9% | ETA 0.5 h
+[082/288] p1 r1 w08 threads_2  0.1154 s/tok cpu 56.06 ram 78.9% | ETA 0.5 h
+[083/288] p1 r1 w08 threads_6  0.0945 s/tok cpu 53.36 ram 78.2% | ETA 0.5 h
+[084/288] p1 r1 w08 balanced   0.1064 s/tok cpu 54.43 ram 78.2% | ETA 0.5 h
+[085/288] p1 r1 w14 threads_4  1.3470 s/tok cpu 89.53 ram 78.5% | ETA 0.5 h
+[086/288] p1 r1 w14 threads_2  0.1519 s/tok cpu 89.1 ram 78.4% | ETA 0.5 h
+[087/288] p1 r1 w14 threads_6  1.5937 s/tok cpu 89.22 ram 78.4% | ETA 0.6 h
+[088/288] p1 r1 w14 threads_10 0.2968 s/tok cpu 85.43 ram 78.4% | ETA 0.6 h
+[089/288] p1 r1 w14 balanced   0.2550 s/tok cpu 89.17 ram 78.5% | ETA 0.6 h
+[090/288] p1 r1 w14 threads_3  0.2635 s/tok cpu 89.45 ram 78.5% | ETA 0.6 h
+[091/288] p1 r1 w10 threads_4  0.1009 s/tok cpu 68.43 ram 78.4% | ETA 0.6 h
+[092/288] p1 r1 w10 threads_6  0.1102 s/tok cpu 65.43 ram 78.4% | ETA 0.6 h
+[093/288] p1 r1 w10 balanced   0.1075 s/tok cpu 65.55 ram 78.4% | ETA 0.5 h
+[094/288] p1 r1 w10 threads_10 0.1132 s/tok cpu 66.44 ram 78.4% | ETA 0.5 h
+[095/288] p1 r1 w10 threads_3  0.1080 s/tok cpu 64.6 ram 78.5% | ETA 0.5 h
+[096/288] p1 r1 w10 threads_2  0.1179 s/tok cpu 64.84 ram 78.5% | ETA 0.5 h
+[097/288] p2 r0 w14 threads_3  0.2645 s/tok cpu 88.46 ram 78.6% | ETA 0.5 h
+[098/288] p2 r0 w14 threads_10 2.7663 s/tok cpu 88.64 ram 78.5% | ETA 0.6 h
+[099/288] p2 r0 w14 threads_6  1.1470 s/tok cpu 90.12 ram 78.7% | ETA 0.6 h
+[100/288] p2 r0 w14 threads_2  0.1883 s/tok cpu 89.95 ram 78.7% | ETA 0.6 h
+[101/288] p2 r0 w14 balanced   0.2746 s/tok cpu 89.24 ram 78.7% | ETA 0.6 h
+[102/288] p2 r0 w14 threads_4  0.2418 s/tok cpu 88.95 ram 78.6% | ETA 0.6 h
+[103/288] p2 r0 w10 threads_2  0.1167 s/tok cpu 67.59 ram 78.6% | ETA 0.6 h
+[104/288] p2 r0 w10 threads_4  0.1019 s/tok cpu 66.03 ram 78.6% | ETA 0.6 h
+[105/288] p2 r0 w10 threads_6  0.1197 s/tok cpu 65.6 ram 78.6% | ETA 0.6 h
+[106/288] p2 r0 w10 threads_10 0.1197 s/tok cpu 67.51 ram 78.6% | ETA 0.6 h
+[107/288] p2 r0 w10 threads_3  0.1056 s/tok cpu 64.49 ram 78.6% | ETA 0.6 h
+[108/288] p2 r0 w10 balanced   0.1065 s/tok cpu 65.91 ram 78.6% | ETA 0.6 h
+[109/288] p2 r0 w12 threads_10 0.2119 s/tok cpu 78.81 ram 78.6% | ETA 0.6 h
+[110/288] p2 r0 w12 threads_4  0.1266 s/tok cpu 77.91 ram 78.6% | ETA 0.5 h
+[111/288] p2 r0 w12 threads_3  0.1096 s/tok cpu 77.82 ram 78.7% | ETA 0.5 h
+[112/288] p2 r0 w12 threads_2  0.1164 s/tok cpu 77.16 ram 78.6% | ETA 0.5 h
+[113/288] p2 r0 w12 balanced   0.1146 s/tok cpu 79.93 ram 78.6% | ETA 0.5 h
+[114/288] p2 r0 w12 threads_6  0.1339 s/tok cpu 77.27 ram 78.6% | ETA 0.5 h
+[115/288] p2 r0 w04 threads_2  0.0998 s/tok cpu 33.36 ram 78.4% | ETA 0.5 h
+[116/288] p2 r0 w04 threads_3  0.0991 s/tok cpu 28.75 ram 78.3% | ETA 0.5 h
+[117/288] p2 r0 w04 threads_6  0.0894 s/tok cpu 29.58 ram 78.3% | ETA 0.5 h
+[118/288] p2 r0 w04 balanced   0.0964 s/tok cpu 31.48 ram 78.3% | ETA 0.5 h
+[119/288] p2 r0 w04 threads_10 0.0808 s/tok cpu 29.76 ram 78.2% | ETA 0.5 h
+[120/288] p2 r0 w04 threads_4  0.0958 s/tok cpu 32.32 ram 78.2% | ETA 0.5 h
+[121/288] p2 r0 w09 threads_4  0.1024 s/tok cpu 61.47 ram 78.6% | ETA 0.5 h
+[122/288] p2 r0 w09 balanced   0.1066 s/tok cpu 58.73 ram 78.6% | ETA 0.5 h
+[123/288] p2 r0 w09 threads_3  0.1069 s/tok cpu 59.43 ram 78.6% | ETA 0.5 h
+[124/288] p2 r0 w09 threads_10 0.1071 s/tok cpu 60.83 ram 78.6% | ETA 0.5 h
+[125/288] p2 r0 w09 threads_6  0.1014 s/tok cpu 60.66 ram 78.6% | ETA 0.5 h
+[126/288] p2 r0 w09 threads_2  0.1187 s/tok cpu 59.32 ram 78.7% | ETA 0.5 h
+[127/288] p2 r0 w00 balanced   0.0891 s/tok cpu 13.11 ram 78.5% | ETA 0.5 h
+[128/288] p2 r0 w00 threads_10 0.0776 s/tok cpu 3.94 ram 78.5% | ETA 0.5 h
+[129/288] p2 r0 w00 threads_2  0.0943 s/tok cpu 4.81 ram 78.5% | ETA 0.4 h
+[130/288] p2 r0 w00 threads_4  0.0810 s/tok cpu 12.29 ram 78.4% | ETA 0.4 h
+[131/288] p2 r0 w00 threads_6  0.0755 s/tok cpu 11.19 ram 78.4% | ETA 0.4 h
+[132/288] p2 r0 w00 threads_3  0.0882 s/tok cpu 14.59 ram 78.6% | ETA 0.4 h
+[133/288] p2 r0 w11 threads_6  0.1314 s/tok cpu 74.9 ram 79.3% | ETA 0.4 h
+[134/288] p2 r0 w11 threads_2  0.1165 s/tok cpu 72.66 ram 78.7% | ETA 0.4 h
+[135/288] p2 r0 w11 threads_3  0.1079 s/tok cpu 71.79 ram 78.8% | ETA 0.4 h
+[136/288] p2 r0 w11 balanced   0.1080 s/tok cpu 71.82 ram 78.8% | ETA 0.4 h
+[137/288] p2 r0 w11 threads_10 0.1304 s/tok cpu 72.24 ram 78.8% | ETA 0.4 h
+[138/288] p2 r0 w11 threads_4  0.1056 s/tok cpu 72.04 ram 78.9% | ETA 0.4 h
+[139/288] p2 r0 w08 threads_4  0.1011 s/tok cpu 53.55 ram 78.7% | ETA 0.4 h
+[140/288] p2 r0 w08 balanced   0.1058 s/tok cpu 53.07 ram 78.7% | ETA 0.4 h
+[141/288] p2 r0 w08 threads_10 0.1117 s/tok cpu 54.03 ram 78.7% | ETA 0.4 h
+[142/288] p2 r0 w08 threads_6  0.0947 s/tok cpu 53.8 ram 78.7% | ETA 0.4 h
+[143/288] p2 r0 w08 threads_2  0.1183 s/tok cpu 54.01 ram 78.7% | ETA 0.4 h
+[144/288] p2 r0 w08 threads_3  0.1068 s/tok cpu 54.57 ram 78.7% | ETA 0.4 h
+[145/288] p2 r1 w14 balanced   0.2562 s/tok cpu 89.51 ram 78.9% | ETA 0.4 h
+[146/288] p2 r1 w14 threads_4  0.2390 s/tok cpu 89.02 ram 79.3% | ETA 0.4 h
+[147/288] p2 r1 w14 threads_6  1.5382 s/tok cpu 89.24 ram 78.3% | ETA 0.4 h
+[148/288] p2 r1 w14 threads_3  0.2586 s/tok cpu 89.48 ram 78.5% | ETA 0.4 h
+[149/288] p2 r1 w14 threads_10 3.5047 s/tok cpu 86.45 ram 78.5% | ETA 0.4 h
+[150/288] p2 r1 w14 threads_2  0.1532 s/tok cpu 89.15 ram 78.9% | ETA 0.4 h
+[151/288] p2 r1 w08 threads_6  0.0951 s/tok cpu 57.08 ram 79.3% | ETA 0.4 h
+[152/288] p2 r1 w08 threads_2  0.1171 s/tok cpu 53.42 ram 79.2% | ETA 0.4 h
+[153/288] p2 r1 w08 threads_4  0.1013 s/tok cpu 54.86 ram 79.2% | ETA 0.4 h
+[154/288] p2 r1 w08 threads_3  0.1051 s/tok cpu 53.19 ram 79.2% | ETA 0.4 h
+[155/288] p2 r1 w08 threads_10 0.1154 s/tok cpu 56.14 ram 79.2% | ETA 0.4 h
+[156/288] p2 r1 w08 balanced   0.1065 s/tok cpu 53.11 ram 79.2% | ETA 0.4 h
+[157/288] p2 r1 w04 threads_6  0.0898 s/tok cpu 36.32 ram 79.2% | ETA 0.4 h
+[158/288] p2 r1 w04 balanced   0.0977 s/tok cpu 29.61 ram 79.2% | ETA 0.4 h
+[159/288] p2 r1 w04 threads_4  0.0953 s/tok cpu 28.75 ram 79.1% | ETA 0.4 h
+[160/288] p2 r1 w04 threads_2  0.0973 s/tok cpu 29.72 ram 79.2% | ETA 0.4 h
+[161/288] p2 r1 w04 threads_10 0.0803 s/tok cpu 27.89 ram 79.2% | ETA 0.4 h
+[162/288] p2 r1 w04 threads_3  0.0991 s/tok cpu 34.88 ram 79.4% | ETA 0.4 h
+[163/288] p2 r1 w09 threads_10 0.1081 s/tok cpu 61.19 ram 79.6% | ETA 0.4 h
+[164/288] p2 r1 w09 threads_4  0.1016 s/tok cpu 61.98 ram 79.5% | ETA 0.4 h
+[165/288] p2 r1 w09 balanced   0.1084 s/tok cpu 59.84 ram 79.5% | ETA 0.4 h
+[166/288] p2 r1 w09 threads_2  0.1177 s/tok cpu 59.61 ram 79.5% | ETA 0.3 h
+[167/288] p2 r1 w09 threads_6  0.0953 s/tok cpu 58.68 ram 79.5% | ETA 0.3 h
+[168/288] p2 r1 w09 threads_3  0.1070 s/tok cpu 60.03 ram 79.5% | ETA 0.3 h
+[169/288] p2 r1 w11 threads_3  0.1082 s/tok cpu 70.95 ram 79.5% | ETA 0.3 h
+[170/288] p2 r1 w11 threads_4  0.1038 s/tok cpu 71.58 ram 79.8% | ETA 0.3 h
+[171/288] p2 r1 w11 balanced   0.1069 s/tok cpu 70.5 ram 79.9% | ETA 0.3 h
+[172/288] p2 r1 w11 threads_2  0.1193 s/tok cpu 72.1 ram 79.8% | ETA 0.3 h
+[173/288] p2 r1 w11 threads_6  0.1346 s/tok cpu 71.53 ram 79.7% | ETA 0.3 h
+[174/288] p2 r1 w11 threads_10 0.1365 s/tok cpu 73.53 ram 79.8% | ETA 0.3 h
+[175/288] p2 r1 w12 threads_2  0.1176 s/tok cpu 78.89 ram 79.8% | ETA 0.3 h
+[176/288] p2 r1 w12 threads_3  0.1095 s/tok cpu 77.01 ram 79.8% | ETA 0.3 h
+[177/288] p2 r1 w12 threads_10 2.5172 s/tok cpu 80.62 ram 79.8% | ETA 0.3 h
+[178/288] p2 r1 w12 threads_4  0.1243 s/tok cpu 78.08 ram 79.8% | ETA 0.3 h
+[179/288] p2 r1 w12 balanced   0.1071 s/tok cpu 76.72 ram 79.9% | ETA 0.3 h
+[180/288] p2 r1 w12 threads_6  0.1373 s/tok cpu 77.64 ram 79.8% | ETA 0.3 h
+[181/288] p2 r1 w00 threads_3  0.0912 s/tok cpu 16.71 ram 79.5% | ETA 0.3 h
+[182/288] p2 r1 w00 threads_10 0.0781 s/tok cpu 4.32 ram 79.4% | ETA 0.3 h
+[183/288] p2 r1 w00 threads_2  0.0945 s/tok cpu 6.64 ram 79.5% | ETA 0.3 h
+[184/288] p2 r1 w00 threads_6  0.0739 s/tok cpu 12.22 ram 79.6% | ETA 0.3 h
+[185/288] p2 r1 w00 threads_4  0.0810 s/tok cpu 7.14 ram 79.5% | ETA 0.3 h
+[186/288] p2 r1 w00 balanced   0.0877 s/tok cpu 6.15 ram 79.4% | ETA 0.3 h
+[187/288] p2 r1 w10 threads_10 0.1192 s/tok cpu 66.89 ram 79.8% | ETA 0.3 h
+[188/288] p2 r1 w10 threads_3  0.1056 s/tok cpu 65.86 ram 79.8% | ETA 0.3 h
+[189/288] p2 r1 w10 threads_4  0.1017 s/tok cpu 66.04 ram 79.8% | ETA 0.3 h
+[190/288] p2 r1 w10 threads_2  0.1177 s/tok cpu 67.73 ram 80.4% | ETA 0.3 h
+[191/288] p2 r1 w10 balanced   0.1074 s/tok cpu 67.41 ram 79.9% | ETA 0.3 h
+[192/288] p2 r1 w10 threads_6  0.1119 s/tok cpu 65.6 ram 79.5% | ETA 0.3 h
+[193/288] p3 r0 w04 threads_2  0.0979 s/tok cpu 30.87 ram 79.4% | ETA 0.3 h
+[194/288] p3 r0 w04 threads_10 0.0805 s/tok cpu 28.2 ram 79.4% | ETA 0.3 h
+[195/288] p3 r0 w04 threads_3  0.0952 s/tok cpu 30.66 ram 79.4% | ETA 0.3 h
+[196/288] p3 r0 w04 threads_6  0.0881 s/tok cpu 28.34 ram 79.3% | ETA 0.3 h
+[197/288] p3 r0 w04 threads_4  0.0947 s/tok cpu 30.78 ram 79.2% | ETA 0.3 h
+[198/288] p3 r0 w04 balanced   0.0997 s/tok cpu 29.12 ram 79.3% | ETA 0.2 h
+[199/288] p3 r0 w14 threads_6  1.4262 s/tok cpu 90.18 ram 79.6% | ETA 0.3 h
+[200/288] p3 r0 w14 balanced   0.1940 s/tok cpu 89.08 ram 79.5% | ETA 0.2 h
+[201/288] p3 r0 w14 threads_3  0.1922 s/tok cpu 89.07 ram 79.5% | ETA 0.2 h
+[202/288] p3 r0 w14 threads_4  1.6834 s/tok cpu 88.56 ram 79.5% | ETA 0.2 h
+[203/288] p3 r0 w14 threads_2  0.1615 s/tok cpu 89.6 ram 79.7% | ETA 0.2 h
+[204/288] p3 r0 w14 threads_10 2.5668 s/tok cpu 89.92 ram 79.7% | ETA 0.3 h
+[205/288] p3 r0 w08 threads_10 0.1137 s/tok cpu 59.64 ram 79.8% | ETA 0.2 h
+[206/288] p3 r0 w08 threads_3  0.1064 s/tok cpu 52.94 ram 79.8% | ETA 0.2 h
+[207/288] p3 r0 w08 balanced   0.1054 s/tok cpu 53.64 ram 79.8% | ETA 0.2 h
+[208/288] p3 r0 w08 threads_2  0.1138 s/tok cpu 53.05 ram 79.8% | ETA 0.2 h
+[209/288] p3 r0 w08 threads_6  0.0948 s/tok cpu 53.1 ram 79.8% | ETA 0.2 h
+[210/288] p3 r0 w08 threads_4  0.1004 s/tok cpu 53.89 ram 79.8% | ETA 0.2 h
+[211/288] p3 r0 w00 threads_2  0.0950 s/tok cpu 12.82 ram 79.5% | ETA 0.2 h
+[212/288] p3 r0 w00 threads_3  0.0878 s/tok cpu 10.78 ram 79.5% | ETA 0.2 h
+[213/288] p3 r0 w00 threads_10 0.0779 s/tok cpu 4.44 ram 79.5% | ETA 0.2 h
+[214/288] p3 r0 w00 threads_6  0.0748 s/tok cpu 7.34 ram 79.6% | ETA 0.2 h
+[215/288] p3 r0 w00 balanced   0.0876 s/tok cpu 10.35 ram 79.6% | ETA 0.2 h
+[216/288] p3 r0 w00 threads_4  0.0814 s/tok cpu 6.62 ram 79.5% | ETA 0.2 h
+[217/288] p3 r0 w11 threads_6  0.1336 s/tok cpu 73.02 ram 79.9% | ETA 0.2 h
+[218/288] p3 r0 w11 threads_4  0.1050 s/tok cpu 71.66 ram 79.9% | ETA 0.2 h
+[219/288] p3 r0 w11 balanced   0.1080 s/tok cpu 71.54 ram 79.9% | ETA 0.2 h
+[220/288] p3 r0 w11 threads_2  0.1170 s/tok cpu 70.48 ram 79.9% | ETA 0.2 h
+[221/288] p3 r0 w11 threads_3  0.1095 s/tok cpu 71.6 ram 79.9% | ETA 0.2 h
+[222/288] p3 r0 w11 threads_10 0.1250 s/tok cpu 72.52 ram 79.9% | ETA 0.2 h
+[223/288] p3 r0 w10 balanced   0.1061 s/tok cpu 66.59 ram 79.9% | ETA 0.2 h
+[224/288] p3 r0 w10 threads_3  0.1057 s/tok cpu 64.96 ram 79.9% | ETA 0.2 h
+[225/288] p3 r0 w10 threads_10 0.1146 s/tok cpu 67.4 ram 79.9% | ETA 0.2 h
+[226/288] p3 r0 w10 threads_2  0.1197 s/tok cpu 66.82 ram 80.0% | ETA 0.2 h
+[227/288] p3 r0 w10 threads_4  0.1031 s/tok cpu 66.77 ram 79.9% | ETA 0.2 h
+[228/288] p3 r0 w10 threads_6  0.1115 s/tok cpu 66.39 ram 79.2% | ETA 0.2 h
+[229/288] p3 r0 w12 balanced   0.1077 s/tok cpu 77.76 ram 79.6% | ETA 0.2 h
+[230/288] p3 r0 w12 threads_10 0.1383 s/tok cpu 79.34 ram 79.6% | ETA 0.2 h
+[231/288] p3 r0 w12 threads_3  0.1088 s/tok cpu 77.8 ram 79.7% | ETA 0.2 h
+[232/288] p3 r0 w12 threads_4  0.1350 s/tok cpu 79.19 ram 79.7% | ETA 0.2 h
+[233/288] p3 r0 w12 threads_6  0.1353 s/tok cpu 77.1 ram 79.7% | ETA 0.2 h
+[234/288] p3 r0 w12 threads_2  0.1169 s/tok cpu 77.37 ram 79.7% | ETA 0.2 h
+[235/288] p3 r0 w09 threads_10 0.1115 s/tok cpu 62.96 ram 79.6% | ETA 0.1 h
+[236/288] p3 r0 w09 threads_6  0.0947 s/tok cpu 58.72 ram 79.5% | ETA 0.1 h
+[237/288] p3 r0 w09 balanced   0.1052 s/tok cpu 58.77 ram 79.5% | ETA 0.1 h
+[238/288] p3 r0 w09 threads_4  0.1008 s/tok cpu 58.55 ram 79.5% | ETA 0.1 h
+[239/288] p3 r0 w09 threads_3  0.1061 s/tok cpu 58.3 ram 79.5% | ETA 0.1 h
+[240/288] p3 r0 w09 threads_2  0.1157 s/tok cpu 59.15 ram 79.5% | ETA 0.1 h
+[241/288] p3 r1 w11 threads_4  0.1056 s/tok cpu 72.78 ram 79.7% | ETA 0.1 h
+[242/288] p3 r1 w11 threads_6  0.1293 s/tok cpu 71.25 ram 79.7% | ETA 0.1 h
+[243/288] p3 r1 w11 threads_3  0.1076 s/tok cpu 71.94 ram 79.7% | ETA 0.1 h
+[244/288] p3 r1 w11 balanced   0.1073 s/tok cpu 71.33 ram 79.7% | ETA 0.1 h
+[245/288] p3 r1 w11 threads_2  0.1170 s/tok cpu 71.44 ram 79.8% | ETA 0.1 h
+[246/288] p3 r1 w11 threads_10 0.1574 s/tok cpu 72.1 ram 79.8% | ETA 0.1 h
+[247/288] p3 r1 w10 threads_4  0.1030 s/tok cpu 66.68 ram 79.8% | ETA 0.1 h
+[248/288] p3 r1 w10 threads_3  0.1065 s/tok cpu 64.61 ram 79.8% | ETA 0.1 h
+[249/288] p3 r1 w10 balanced   0.1063 s/tok cpu 64.7 ram 79.8% | ETA 0.1 h
+[250/288] p3 r1 w10 threads_10 0.1185 s/tok cpu 65.64 ram 79.8% | ETA 0.1 h
+[251/288] p3 r1 w10 threads_6  0.1085 s/tok cpu 65.5 ram 79.8% | ETA 0.1 h
+[252/288] p3 r1 w10 threads_2  0.1175 s/tok cpu 64.8 ram 79.8% | ETA 0.1 h
+[253/288] p3 r1 w14 threads_2  0.1623 s/tok cpu 88.97 ram 80.0% | ETA 0.1 h
+[254/288] p3 r1 w14 threads_10 0.2633 s/tok cpu 89.02 ram 80.0% | ETA 0.1 h
+[255/288] p3 r1 w14 balanced   0.1777 s/tok cpu 88.86 ram 79.9% | ETA 0.1 h
+[256/288] p3 r1 w14 threads_3  0.1851 s/tok cpu 90.76 ram 79.9% | ETA 0.1 h
+[257/288] p3 r1 w14 threads_4  1.9057 s/tok cpu 88.34 ram 80.3% | ETA 0.1 h
+[258/288] p3 r1 w14 threads_6  1.4695 s/tok cpu 90.26 ram 79.7% | ETA 0.1 h
+[259/288] p3 r1 w12 threads_4  0.1235 s/tok cpu 77.53 ram 79.7% | ETA 0.1 h
+[260/288] p3 r1 w12 threads_3  0.1109 s/tok cpu 77.72 ram 79.7% | ETA 0.1 h
+[261/288] p3 r1 w12 balanced   0.1067 s/tok cpu 77.02 ram 79.7% | ETA 0.1 h
+[262/288] p3 r1 w12 threads_6  0.1851 s/tok cpu 78.01 ram 79.7% | ETA 0.1 h
+[263/288] p3 r1 w12 threads_2  0.1186 s/tok cpu 77.19 ram 79.7% | ETA 0.1 h
+[264/288] p3 r1 w12 threads_10 0.1504 s/tok cpu 77.41 ram 79.6% | ETA 0.1 h
+[265/288] p3 r1 w00 threads_10 0.0798 s/tok cpu 20.38 ram 79.6% | ETA 0.1 h
+[266/288] p3 r1 w00 threads_2  0.0953 s/tok cpu 13.88 ram 79.7% | ETA 0.1 h
+[267/288] p3 r1 w00 threads_4  0.0815 s/tok cpu 12.49 ram 80.0% | ETA 0.1 h
+[268/288] p3 r1 w00 balanced   0.0882 s/tok cpu 11.11 ram 80.0% | ETA 0.1 h
+[269/288] p3 r1 w00 threads_6  0.0738 s/tok cpu 4.97 ram 79.8% | ETA 0.1 h
+[270/288] p3 r1 w00 threads_3  0.0873 s/tok cpu 8.46 ram 79.7% | ETA 0.1 h
+[271/288] p3 r1 w04 threads_2  0.0952 s/tok cpu 29.3 ram 79.9% | ETA 0.0 h
+[272/288] p3 r1 w04 threads_10 0.0800 s/tok cpu 28.62 ram 79.9% | ETA 0.0 h
+[273/288] p3 r1 w04 balanced   0.0926 s/tok cpu 28.6 ram 79.6% | ETA 0.0 h
+[274/288] p3 r1 w04 threads_3  0.0997 s/tok cpu 30.92 ram 79.6% | ETA 0.0 h
+[275/288] p3 r1 w04 threads_6  0.0895 s/tok cpu 28.24 ram 79.6% | ETA 0.0 h
+[276/288] p3 r1 w04 threads_4  0.0954 s/tok cpu 27.63 ram 79.6% | ETA 0.0 h
+[277/288] p3 r1 w08 threads_10 0.1033 s/tok cpu 53.23 ram 79.8% | ETA 0.0 h
+[278/288] p3 r1 w08 threads_6  0.0950 s/tok cpu 53.11 ram 79.7% | ETA 0.0 h
+[279/288] p3 r1 w08 balanced   0.1072 s/tok cpu 52.73 ram 79.7% | ETA 0.0 h
+[280/288] p3 r1 w08 threads_2  0.1122 s/tok cpu 52.86 ram 79.7% | ETA 0.0 h
+[281/288] p3 r1 w08 threads_3  0.1070 s/tok cpu 53.14 ram 79.7% | ETA 0.0 h
+[282/288] p3 r1 w08 threads_4  0.1014 s/tok cpu 52.46 ram 79.7% | ETA 0.0 h
+[283/288] p3 r1 w09 threads_2  0.1271 s/tok cpu 72.64 ram 80.0% | ETA 0.0 h
+[284/288] p3 r1 w09 threads_10 0.1268 s/tok cpu 68.22 ram 80.1% | ETA 0.0 h
+LOAD SWEEP v7: 288 runs, 284 done, commit 3e3b13b4f7 (dirty)
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   0%|          | 1/201 [00:00<00:28,  7.10it/s]Loading weights:   2%|2         | 5/201 [00:00<00:11, 17.73it/s]Loading weights:   5%|4         | 10/201 [00:00<00:08, 21.62it/s]Loading weights:  18%|#7        | 36/201 [00:00<00:01, 84.85it/s]Loading weights:  23%|##3       | 47/201 [00:00<00:01, 91.09it/s]Loading weights:  29%|##8       | 58/201 [00:00<00:01, 87.02it/s]Loading weights:  34%|###3      | 68/201 [00:00<00:01, 84.26it/s]Loading weights:  40%|####      | 81/201 [00:01<00:01, 80.17it/s]Loading weights:  49%|####9     | 99/201 [00:01<00:01, 101.34it/s]Loading weights:  55%|#####5    | 111/201 [00:01<00:00, 97.89it/s]Loading weights:  65%|######4   | 130/201 [00:01<00:00, 95.41it/s]Loading weights:  74%|#######3  | 148/201 [00:01<00:00, 94.12it/s]Loading weights:  79%|#######8  | 158/201 [00:02<00:00, 78.88it/s]Loading weights:  83%|########3 | 167/201 [00:02<00:00, 54.97it/s]Loading weights:  87%|########7 | 175/201 [00:02<00:00, 55.19it/s]Loading weights:  92%|#########1| 184/201 [00:03<00:00, 18.59it/s]Loading weights: 100%|##########| 201/201 [00:03<00:00, 50.50it/s]
+Model loaded successfully!
+[285/288] p3 r1 w09 threads_6  0.1201 s/tok cpu 73.58 ram 83.5% | ETA 0.0 h
+[286/288] p3 r1 w09 threads_3  0.1243 s/tok cpu 82.33 ram 81.6% | ETA 0.0 h
+[287/288] p3 r1 w09 balanced   0.1046 s/tok cpu 61.39 ram 82.1% | ETA 0.0 h
+[288/288] p3 r1 w09 threads_4  0.1009 s/tok cpu 60.88 ram 82.1% | ETA 0.0 h
+Load sweep v7 summary (run_load_sweep_v7.py --summary-only), source: data/processed/load_sweep_v7.csv
+runs completed: 288 of 288; metric: median decode s/token (prefill excluded)
+commit hashes: ['3e3b13b4f7b25d46248ccfe78a2c42aa6df16f89']
+
+1. s/token per workers level and arm: mean [min, max] over prompts x repeats; best arm = lowest mean
+workers  0: best threads_6
+    threads_2  0.0953 [0.0943, 0.0974] n=6
+    threads_3  0.0910 [0.0873, 0.1026] n=6
+    balanced   0.0897 [0.0870, 0.0986] n=6
+    threads_4  0.0814 [0.0810, 0.0823] n=6
+    threads_6  0.0754 [0.0728, 0.0818] n=6
+    threads_10 0.0790 [0.0776, 0.0820] n=6
+workers  4: best threads_10
+    threads_2  0.0978 [0.0952, 0.0998] n=6
+    threads_3  0.0975 [0.0951, 0.0997] n=6
+    balanced   0.0971 [0.0926, 0.0997] n=6
+    threads_4  0.0953 [0.0947, 0.0959] n=6
+    threads_6  0.0897 [0.0881, 0.0919] n=6
+    threads_10 0.0803 [0.0797, 0.0808] n=6
+workers  8: best threads_6
+    threads_2  0.1158 [0.1122, 0.1183] n=6
+    threads_3  0.1074 [0.1051, 0.1139] n=6
+    balanced   0.1084 [0.1054, 0.1192] n=6
+    threads_4  0.1011 [0.1004, 0.1014] n=6
+    threads_6  0.0950 [0.0945, 0.0956] n=6
+    threads_10 0.1124 [0.1033, 0.1168] n=6
+workers  9: best threads_6
+    threads_2  0.1182 [0.1146, 0.1271] n=6
+    threads_3  0.1088 [0.1032, 0.1243] n=6
+    balanced   0.1061 [0.1046, 0.1084] n=6
+    threads_4  0.1015 [0.1008, 0.1024] n=6
+    threads_6  0.1009 [0.0947, 0.1201] n=6
+    threads_10 0.1118 [0.1068, 0.1268] n=6
+workers 10: best threads_4
+    threads_2  0.1175 [0.1158, 0.1197] n=6
+    threads_3  0.1064 [0.1056, 0.1080] n=6
+    balanced   0.1067 [0.1061, 0.1075] n=6
+    threads_4  0.1021 [0.1009, 0.1031] n=6
+    threads_6  0.1119 [0.1085, 0.1197] n=6
+    threads_10 0.1192 [0.1132, 0.1297] n=6
+workers 11: best threads_4
+    threads_2  0.1175 [0.1165, 0.1193] n=6
+    threads_3  0.1078 [0.1068, 0.1095] n=6
+    balanced   0.1072 [0.1065, 0.1080] n=6
+    threads_4  0.1043 [0.1026, 0.1056] n=6
+    threads_6  0.1310 [0.1260, 0.1346] n=6
+    threads_10 0.3339 [0.1250, 1.3213] n=6
+workers 12: best balanced
+    threads_2  0.1188 [0.1164, 0.1253] n=6
+    threads_3  0.1108 [0.1085, 0.1173] n=6
+    balanced   0.1101 [0.1067, 0.1152] n=6
+    threads_4  0.1323 [0.1233, 0.1612] n=6
+    threads_6  0.1444 [0.1339, 0.1851] n=6
+    threads_10 0.8712 [0.1383, 2.5172] n=6
+workers 14: best threads_2
+    threads_2  0.1641 [0.1519, 0.1883] n=6
+    threads_3  0.2256 [0.1851, 0.2645] n=6
+    balanced   0.2359 [0.1777, 0.2746] n=6
+    threads_4  0.9373 [0.2070, 1.9057] n=6
+    threads_6  1.4920 [1.1470, 1.7773] n=6
+    threads_10 2.0851 [0.2633, 3.5047] n=6
+
+2. Paired difference threads_3 vs balanced: 100 * (threads_3 - balanced) / balanced, per (prompt, repeat)
+workers  0: mean +1.42 %  range [-1.00, +4.04] %  n=6
+workers  4: mean +0.57 %  range [-4.58, +7.62] %  n=6
+workers  8: mean -0.85 %  range [-4.42, +1.01] %  n=6
+workers  9: mean +2.59 %  range [-2.42, +18.82] %  n=6
+workers 10: mean -0.28 %  range [-1.71, +0.53] %  n=6
+workers 11: mean +0.59 %  range [-0.07, +1.31] %  n=6
+workers 12: mean +0.71 %  range [-4.33, +3.94] %  n=6
+workers 14: mean -3.78 %  range [-26.46, +4.13] %  n=6
+
+3. Mean external CPU % per workers level (before run / during run)
+workers  0: before 11.7 %  during 11.4 %
+workers  4: before 32.4 %  during 30.0 %
+workers  8: before 56.2 %  during 55.0 %
+workers  9: before 62.6 %  during 61.6 %
+workers 10: before 68.1 %  during 66.0 %
+workers 11: before 73.4 %  during 71.9 %
+workers 12: before 79.8 %  during 78.3 %
+workers 14: before 92.0 %  during 89.3 %
+
+4. Skipped runs and paging events
+skipped runs (RAM guard): 0
+paging-flagged runs (max segment system pages input >= 1000): 30
+ prompt_id  repeat  load_workers        arm  max_segment_system_pages_input  decode_sec_per_token
+         1       0             0   balanced                            2684              0.098567
+         1       0             0  threads_3                            9288              0.102553
+         1       0             0 threads_10                            5630              0.082044
+         1       0            12  threads_4                            2911              0.161203
+         1       0            12  threads_6                            4910              0.137526
+         1       0            12  threads_3                            1370              0.117344
+         1       0            12 threads_10                            2079              1.993518
+         1       0            14  threads_4                          130608              0.206967
+         1       0            14  threads_3                            4927              0.189663
+         1       0            14  threads_6                            2234              1.777329
+         1       0            14 threads_10                            5546              3.112578
+         1       0             8  threads_3                            1514              0.113949
+         1       0            11 threads_10                            1725              1.321318
+         1       1             0 threads_10                           18238              0.078500
+         1       1             0  threads_2                            2315              0.095240
+         2       0            14 threads_10                            2726              2.766290
+         2       0             9  threads_6                            5830              0.101419
+         2       1            14 threads_10                            2332              3.504733
+         2       1             9  threads_4                            2386              0.101556
+         2       1             9  threads_6                            1987              0.095320
+         3       0            14 threads_10                            3561              2.566803
+         3       1            14  threads_3                            2355              0.185055
+         3       1            14  threads_4                            2052              1.905680
+         3       1            12 threads_10                           11227              0.150442
+         3       1             0 threads_10                            1704              0.079772
+         3       1             0  threads_2                            8893              0.095343
+         3       1             4  threads_2                            1615              0.095219
+         3       1             9  threads_2                           17662              0.127071
+         3       1             9 threads_10                            2541              0.126785
+         3       1             9  threads_6                            7635              0.120139
+RAM % before runs: min 77.8, max 83.5
+

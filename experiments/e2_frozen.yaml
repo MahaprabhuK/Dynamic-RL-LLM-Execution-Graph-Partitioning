@@ -1,0 +1,21 @@
+source: data/processed/v7runs_pilot_v7.csv
+built_by: experiments/analyze_e2.py
+freeze_rule: pick the rule_lookup config with the lowest total mean latency over spike
+  + ramp (mean spike latency + mean ramp latency). If another config is within 2%
+  of that total, choose among those the one with the fewest switches per request (mean
+  over spike + ramp runs); remaining ties -> lowest total. Written to experiments/e2_frozen.yaml
+  by experiments/analyze_e2.py.
+winner: rule_i10_p1_off
+policy: rule_lookup
+rule_file: experiments/e3_rule.yaml
+decision_interval: 10
+patience: 1
+emergency_latency_factor: null
+conservative_arm: balanced
+total_mean_latency_spike_plus_ramp_s: 42.235
+switches_per_request: 2.667
+configs_within_2_percent:
+- rule_i10_p0_em3
+- rule_i10_p1_off
+- rule_i5_p0_off
+- rule_i5_p1_em3

@@ -1,0 +1,179 @@
+stage: e4_main_run
+tag: v7
+frozen_from: experiments/e2_frozen.yaml
+prompts:
+- 21
+- 22
+- 23
+- 24
+- 25
+- 26
+- 27
+- 28
+- 29
+- 30
+- 31
+- 32
+- 33
+- 34
+- 35
+max_new_tokens: 200
+ignore_eos: true
+seed: 11
+decision_interval: 10
+scenarios:
+  steady_idle:
+  - - 0
+    - 0
+  steady_heavy:
+  - - 0
+    - 10
+  spike:
+  - - 0
+    - 0
+  - - 60
+    - 10
+  relief:
+  - - 0
+    - 10
+  - - 60
+    - 0
+  ramp:
+  - - 0
+    - 0
+  - - 60
+    - 8
+  - - 140
+    - 12
+ram_guard:
+  max_percent: 85.0
+  wait_seconds: 30
+  retries: 10
+paging_flag:
+  system_pages_input_per_segment: 1000
+conditions:
+- name: threads_2
+  policy: fixed
+  arm: threads_2
+- name: balanced
+  policy: fixed
+  arm: balanced
+- name: latency_optimized
+  policy: fixed
+  arm: latency_optimized
+- name: static
+  policy: fixed
+  arm: static
+- name: rule_v5
+  policy: rule
+  threshold: 60.0
+  low_arm: static
+  high_arm: balanced
+  patience: 2
+  interval: 10
+- name: rule_lookup
+  policy: rule_lookup
+  rule_file: experiments/e3_rule.yaml
+  interval: 10
+  patience: 1
+- name: cores_heuristic
+  policy: cores_heuristic
+  interval: 10
+  patience: 1
+- name: rl_adaptive
+  policy: rl
+  v7_state: true
+  model: data/processed/dqn_model_v7.pth
+  state_size: 3
+  action_size: 6
+  arms:
+  - threads_2
+  - threads_3
+  - balanced
+  - threads_4
+  - threads_6
+  - threads_10
+  interval: 10
+  patience: 1
+- name: bandit_adaptive
+  policy: bandit
+  v7: true
+  prior_file: experiments/e4_bandit_prior.yaml
+  interval: 10
+  seed: 11
+condition_order: randomised within each context (prompt x scenario), seeded; scenario
+  order per prompt seeded
+total_runs: 675
+primary_analysis:
+  test: paired t-test on per-context latency (seconds), two-sided
+  correction: Holm over the 20 tests below, alpha 0.05
+  alongside:
+  - Wilcoxon signed-rank p
+  - 95% bootstrap CI of the mean paired difference
+  tests:
+  - a: rule_lookup
+    b: balanced
+    scenario: steady_idle
+  - a: rule_lookup
+    b: balanced
+    scenario: steady_heavy
+  - a: rule_lookup
+    b: balanced
+    scenario: spike
+  - a: rule_lookup
+    b: balanced
+    scenario: relief
+  - a: rule_lookup
+    b: balanced
+    scenario: ramp
+  - a: rule_lookup
+    b: threads_2
+    scenario: steady_idle
+  - a: rule_lookup
+    b: threads_2
+    scenario: steady_heavy
+  - a: rule_lookup
+    b: threads_2
+    scenario: spike
+  - a: rule_lookup
+    b: threads_2
+    scenario: relief
+  - a: rule_lookup
+    b: threads_2
+    scenario: ramp
+  - a: rl_adaptive
+    b: rule_lookup
+    scenario: steady_idle
+  - a: rl_adaptive
+    b: rule_lookup
+    scenario: steady_heavy
+  - a: rl_adaptive
+    b: rule_lookup
+    scenario: spike
+  - a: rl_adaptive
+    b: rule_lookup
+    scenario: relief
+  - a: rl_adaptive
+    b: rule_lookup
+    scenario: ramp
+  - a: cores_heuristic
+    b: rule_lookup
+    scenario: steady_idle
+  - a: cores_heuristic
+    b: rule_lookup
+    scenario: steady_heavy
+  - a: cores_heuristic
+    b: rule_lookup
+    scenario: spike
+  - a: cores_heuristic
+    b: rule_lookup
+    scenario: relief
+  - a: cores_heuristic
+    b: rule_lookup
+    scenario: ramp
+  exclusions: none in the primary analysis
+descriptive: everything else; no significance labels
+sensitivity: same tables with paging-flagged runs (paging_flag) removed, labelled
+  as sensitivity
+night_1: prompts 21-28
+night_2: prompts 29-35

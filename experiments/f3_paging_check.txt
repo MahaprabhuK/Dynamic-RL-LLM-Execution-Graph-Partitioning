@@ -1,0 +1,28 @@
+F3 paging check (written by experiments/f3_paging_check.py)
+prompt id 1, arm balanced, 50 tokens, ignore_eos; segment = 10 tokens
+commit 6fc0259e019303ae6c1251c2ea1e78fbedc63a02
+before normal run:   RAM 94.2%, available 936.2 MB, 2026-10-13T03:13:02
+helper: READY allocated_mb=256 available_mb=982
+before pressure run: RAM 93.9%, available 981.8 MB, 2026-10-13T03:13:13
+
+Per-segment telemetry:
+     run  segment  start_step  end_step  segment_seconds  swap_sin_delta  swap_sout_delta  page_faults_delta  available_mb  ram_percent
+  normal        0           0         9         2.713618               0                0               2038        1198.7         92.5
+  normal        1          10        19         1.999804               0                0                570        1280.5         92.0
+  normal        2          20        29         1.838314               0                0                696        1271.6         92.1
+  normal        3          30        39         1.890624               0                0               1716        1270.0         92.1
+  normal        4          40        49         1.828767               0                0                270        1268.3         92.1
+pressure        0           0         9         2.209721               0                0                851         987.3         93.9
+pressure        1          10        19         2.406560               0                0                754         985.7         93.9
+pressure        2          20        29         2.640599               0                0                705         985.7         93.9
+pressure        3          30        39         2.817050               0                0               2052         986.1         93.9
+pressure        4          40        49         2.643765               0                0                517         979.4         93.9
+
+Per-run totals:
+          total_page_faults  max_segment_page_faults  swap_sin  swap_sout  min_available_mb  latency_seconds
+run                                                                                                         
+normal                 5290                     2038         0          0            1198.7            11.04
+pressure               4879                     2052         0          0             979.4            12.72
+
+page-fault delta ratio pressure/normal: 0.92
+note: psutil reports swap sin/sout as 0 on Windows; num_page_faults counts soft and hard faults.

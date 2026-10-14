@@ -1,0 +1,40 @@
+# Stage 5: reaction-delay pilot (Prompt 5 of Agent_Prompts_Unfinished_Work.pdf). Do not edit after the run starts.
+# Runner: run_v7.py --plan experiments/e2_plan.yaml; analysis/freeze: experiments/analyze_e2.py
+stage: e2_pilot
+tag: pilot_v7
+prompts: [4, 5, 6]          # not used in the main run (21-35)
+max_new_tokens: 200
+ignore_eos: true
+seed: 13                    # scenario order per prompt and condition order per (prompt, scenario)
+decision_interval: 10       # default; each rule_lookup config sets its own
+scenarios:
+  spike: [[0, 0], [60, 10]]               # 0 workers, 10 from token 60
+  ramp: [[0, 0], [60, 8], [140, 12]]      # 0, 8 from token 60, 12 from token 140
+ram_guard: {max_percent: 85.0, wait_seconds: 30, retries: 10}
+paging_flag: {system_pages_input_per_segment: 1000}
+# Note: in src/scheduler/adaptive.py patience 0 and 1 both switch on the first differing proposal,
+# so p0 and p1 configs are behaviourally identical (they act as replicates).
+conditions:
+  - {name: threads_2, policy: fixed, arm: threads_2}
+  - {name: balanced, policy: fixed, arm: balanced}
+  - {name: rule_i5_p0_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 0}
+  - {name: rule_i5_p1_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 1}
+  - {name: rule_i5_p2_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 2}
+  - {name: rule_i10_p0_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 0}
+  - {name: rule_i10_p1_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 1}
+  - {name: rule_i10_p2_off, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 2}
+  - {name: rule_i5_p0_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 0, emergency_latency_factor: 3.0, conservative_arm: balanced}
+  - {name: rule_i5_p1_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 1, emergency_latency_factor: 3.0, conservative_arm: balanced}
+  - {name: rule_i5_p2_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 5, patience: 2, emergency_latency_factor: 3.0, conservative_arm: balanced}
+  - {name: rule_i10_p0_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 0, emergency_latency_factor: 3.0, conservative_arm: balanced}
+  - {name: rule_i10_p1_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 1, emergency_latency_factor: 3.0, conservative_arm: balanced}
+  - {name: rule_i10_p2_em3, policy: rule_lookup, rule_file: experiments/e3_rule.yaml, interval: 10, patience: 2, emergency_latency_factor: 3.0, conservative_arm: balanced}
+total_runs: 84              # 14 conditions x 2 scenarios x 3 prompts
+analysis: >
+  per config and scenario: mean latency, switches per request, emergency triggers per request;
+  gap of each config to fixed balanced in spike (s and %).
+freeze_rule: >
+  pick the rule_lookup config with the lowest total mean latency over spike + ramp
+  (mean spike latency + mean ramp latency). If another config is within 2% of that total,
+  choose among those the one with the fewest switches per request (mean over spike + ramp runs);
+  remaining ties -> lowest total. Written to experiments/e2_frozen.yaml by experiments/analyze_e2.py.

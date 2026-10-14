@@ -1,0 +1,32 @@
+Smoke checks for tag smoke_v7 (experiments/check_smoke.py; source data/processed/v7runs_smoke_v7.csv)
+[PASS] all planned conditions ran: ran ['balanced', 'bandit_adaptive', 'cores_heuristic', 'latency_optimized', 'rl_adaptive', 'rule_v5', 'static', 'threads_2']
+[PASS] fixed conditions: 0 switches: {'static': 0, 'balanced': 0, 'latency_optimized': 0, 'threads_2': 0}
+[PASS] fixed conditions: 0 emergency triggers: {'static': 0, 'balanced': 0, 'latency_optimized': 0, 'threads_2': 0}
+[PASS] fixed conditions: one arm per run in timeline: {'balanced': <ArrowStringArray>
+['balanced']
+Length: 1, dtype: str, 'latency_optimized': <ArrowStringArray>
+['latency_optimized']
+Length: 1, dtype: str, 'static': <ArrowStringArray>
+['static']
+Length: 1, dtype: str, 'threads_2': <ArrowStringArray>
+['threads_2']
+Length: 1, dtype: str}
+[PASS] token IDs identical across all conditions: 1 distinct token sequences
+[PASS] all runs generated max_new_tokens: [50]
+[PASS] paging columns exist (runs): []
+[PASS] paging columns exist (segments): []
+[PASS] paging columns have no nulls: {}
+[PASS] system pages-input counter available: 0 segments without the counter
+[PASS] commit hash filled: ['31c45420900b6e1eeb23c6ad72e02c90af4bf57a']
+[PASS] RAM and wall-clock columns filled: 
+
+Runs:
+        condition  run_order  latency_seconds  decode_sec_per_token  num_switches  emergency_triggers         arms_used  external_cpu_before  ram_percent_before  page_faults_delta  system_pages_input_delta  paging_flag
+           static          0           4.2997              0.079222             0                   0            static                 6.22                77.3               4512                        63        False
+         balanced          1           4.9479              0.088296             0                   0          balanced                 5.97                77.4               3140                        43        False
+  bandit_adaptive          2           4.2846              0.078864             0                   0            static                 3.00                77.4               3341                       447        False
+  cores_heuristic          3           4.2831              0.078506             0                   0        threads_10                 7.68                77.4               3450                       163        False
+          rule_v5          4           4.2739              0.078782             0                   0            static                 5.05                77.5               3347                        81        False
+latency_optimized          5           4.3761              0.079202             0                   0 latency_optimized                 5.32                77.5               2887                       296        False
+        threads_2          6           5.3894              0.095513             0                   0         threads_2                 3.90                77.6               3231                       125        False
+      rl_adaptive          7           4.3405              0.078611             0                   0        threads_10                 4.29                77.5               3513                        12        False

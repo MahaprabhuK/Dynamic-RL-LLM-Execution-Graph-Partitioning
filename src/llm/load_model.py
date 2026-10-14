@@ -1,17 +1,29 @@
+from functools import lru_cache
+
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
-MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+from src.config import load_config
+
+MODEL_NAME = load_config()["model"]["name"]
+
+
+@lru_cache(maxsize=1)
+def load_tokenizer():
+    return AutoTokenizer.from_pretrained(MODEL_NAME)
 
 
 def load_model():
-    print("Loading TinyLlama...")
+    model_config = load_config()["model"]
+    dtype = getattr(torch, model_config["dtype"])
 
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    print(f"Loading {MODEL_NAME} ({model_config['dtype']})...")
+
+    tokenizer = load_tokenizer()
 
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        dtype=torch.float32
+        dtype=dtype
     )
 
     model.eval()

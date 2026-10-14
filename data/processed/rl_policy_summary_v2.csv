@@ -1,0 +1,5 @@
+condition,num_prompts,mean_latency,median_latency,std_latency,mean_tokens_per_sec,mean_cpu_percent,mean_ram_percent,mean_ram_used_gb,mean_handoff_latency_seconds,mean_activation_handoff_mb,strategy_distribution
+static,20,25.1162,27.3638,8.7023,2.32,40.64,89.65,14.07,0.00260418,0.9257,static:20
+balanced,20,12.4454,9.5998,8.2376,5.64,65.28,88.75,13.93,0.00316218,1.8515,balanced:20
+latency_optimized,20,19.744,23.9175,8.7171,3.32,49.27,90.42,14.19,0.00180286,0.9257,latency_optimized:20
+rl_policy,20,19.3749,22.769,9.8077,3.63,54.22,91.58,14.37,0.00196446,0.9257,latency_optimized:20

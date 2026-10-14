@@ -1,0 +1,114 @@
+source: data/processed/load_sweep_v7.csv
+built_by: experiments/build_rule_v7.py
+metric: median decode s/token per (workers level, arm) over prompts x repeats
+cpu_measure: mean external CPU % during runs at each workers level (all arms)
+edges:
+- 63.8
+- 75.09
+- 83.77
+arms:
+- threads_6
+- threads_4
+- balanced
+- threads_2
+bins:
+- arm: threads_6
+  cpu_range:
+  - null
+  - 63.8
+  levels:
+  - workers: 0
+    external_cpu_during: 11.4
+    best_arm: threads_6
+    median_sec_per_token:
+      balanced: 0.08794
+      threads_10: 0.07829
+      threads_2: 0.09514
+      threads_3: 0.08857
+      threads_4: 0.08133
+      threads_6: 0.07437
+  - workers: 4
+    external_cpu_during: 30.03
+    best_arm: threads_10
+    median_sec_per_token:
+      balanced: 0.09776
+      threads_10: 0.08034
+      threads_2: 0.09759
+      threads_3: 0.09814
+      threads_4: 0.09538
+      threads_6: 0.0896
+  - workers: 8
+    external_cpu_during: 54.96
+    best_arm: threads_6
+    median_sec_per_token:
+      balanced: 0.10645
+      threads_10: 0.11347
+      threads_2: 0.11621
+      threads_3: 0.10663
+      threads_4: 0.10119
+      threads_6: 0.09494
+  - workers: 9
+    external_cpu_during: 61.57
+    best_arm: threads_6
+    median_sec_per_token:
+      balanced: 0.10608
+      threads_10: 0.1093
+      threads_2: 0.11671
+      threads_3: 0.10653
+      threads_4: 0.10149
+      threads_6: 0.09694
+- arm: threads_4
+  cpu_range:
+  - 63.8
+  - 75.09
+  levels:
+  - workers: 10
+    external_cpu_during: 66.03
+    best_arm: threads_4
+    median_sec_per_token:
+      balanced: 0.10657
+      threads_10: 0.11888
+      threads_2: 0.1176
+      threads_3: 0.1061
+      threads_4: 0.10209
+      threads_6: 0.11084
+  - workers: 11
+    external_cpu_during: 71.94
+    best_arm: threads_4
+    median_sec_per_token:
+      balanced: 0.10712
+      threads_10: 0.1348
+      threads_2: 0.11718
+      threads_3: 0.10776
+      threads_4: 0.10439
+      threads_6: 0.13126
+- arm: balanced
+  cpu_range:
+  - 75.09
+  - 83.77
+  levels:
+  - workers: 12
+    external_cpu_during: 78.25
+    best_arm: balanced
+    median_sec_per_token:
+      balanced: 0.10836
+      threads_10: 0.21393
+      threads_2: 0.11793
+      threads_3: 0.10958
+      threads_4: 0.12543
+      threads_6: 0.1374
+- arm: threads_2
+  cpu_range:
+  - 83.77
+  - null
+  levels:
+  - workers: 14
+    external_cpu_during: 89.29
+    best_arm: threads_2
+    median_sec_per_token:
+      balanced: 0.25563
+      threads_10: 2.66655
+      threads_2: 0.16188
+      threads_3: 0.22543
+      threads_4: 0.79438
+      threads_6: 1.50386

@@ -1,107 +1,83 @@
-import numpy as np
-import pandas as pd
+from pathlib import Path
 
+from src.data.load_prompts import load_prompts
+from src.llm.inference import get_tokenizer
 from src.rl.dqn_agent import DQNAgent
+from src.rl.features import observe_state
 from src.scheduler.scheduler import RLScheduler
 from src.scheduler.static_scheduler import StaticScheduler
-from src.graph.execution_graph import build_execution_graph
+from src.telemetry.monitor import collect_metrics
+
+MODEL_CANDIDATES = [
+    "data/processed/dqn_model_v3.pth",
+    "data/processed/dqn_model_v2.pth"
+]
 
 
-def normalize_state(row):
+def print_graph(graph):
+    for node in graph.nodes:
+        attrs = graph.nodes[node]
+        print(
+            f"{node:10s} -> Partition {attrs.get('partition', 'not assigned')}"
+            f" (threads: {attrs.get('num_threads')})"
+        )
+
+
+def compare_schedulers(prompt_index=0):
     """
-    Convert one runtime-metrics row into the normalized
-    state representation used by the DQN.
+    Show which strategy the static and RL schedulers pick for one request,
+    using a live pre-decision state (current CPU/RAM + prompt features).
     """
 
-    return np.array([
-        row["prompt_length"] / 200.0,
-        row["response_length"] / 600.0,
-        row["latency_seconds"] / 40.0,
-        row["cpu_percent"] / 100.0,
-        row["ram_percent"] / 100.0
-    ], dtype=np.float32)
+    prompt = load_prompts(limit=prompt_index + 1)[prompt_index]
+    pre_metrics = collect_metrics()
+    state = observe_state(prompt, get_tokenizer(), pre_metrics)
 
-
-def compare_schedulers():
-
-    # Load actual runtime measurements
-    df = pd.read_csv(
-        "data/processed/runtime_metrics.csv"
-    )
-
-    # Use the first recorded inference request
-    row = df.iloc[0]
-
-    state = normalize_state(row)
-
-    print("REAL RUNTIME STATE")
+    print("PRE-DECISION STATE")
     print("------------------")
-    print(
-        f"Prompt length:   {row['prompt_length']}"
-    )
-    print(
-        f"Response length: {row['response_length']}"
-    )
-    print(
-        f"Latency:         {row['latency_seconds']:.3f}s"
-    )
-    print(
-        f"CPU:             {row['cpu_percent']:.1f}%"
-    )
-    print(
-        f"RAM:             {row['ram_percent']:.1f}%"
-    )
-
-    # Build graph
-    graph = build_execution_graph(
-        prompt_id=int(row["prompt_id"])
-    )
+    print(f"Prompt:          {prompt[:60]!r}")
+    print(f"Prompt length:   {len(prompt)}")
+    print(f"CPU:             {pre_metrics['cpu_percent']:.1f}%")
+    print(f"RAM:             {pre_metrics['ram_percent']:.1f}%")
+    print(f"State vector:    {state}")
 
     # -------------------------
     # Static Scheduler
     # -------------------------
 
-    static_scheduler = StaticScheduler()
-
-    static_plan = static_scheduler.schedule(
-        graph
+    _, static_strategy, static_graph = StaticScheduler().schedule(
+        state,
+        prompt_id=prompt_index + 1
     )
 
     print("\nSTATIC SCHEDULER")
     print("----------------")
-    print(static_plan)
+    print("Strategy:", static_strategy.strategy_name)
+    print_graph(static_graph)
 
     # -------------------------
     # RL Scheduler
     # -------------------------
 
+    model_path = next((p for p in MODEL_CANDIDATES if Path(p).exists()), None)
+    if model_path is None:
+        print("\nNo trained DQN model found. Run: python -m src.rl.train")
+        return
+
     agent = DQNAgent()
-    agent.load("data/processed/dqn_model.pth")
+    agent.load(model_path)
     agent.epsilon = 0.0
 
-    rl_scheduler = RLScheduler(agent)
-
-    action, strategy, rl_graph = rl_scheduler.schedule(
+    action, strategy, rl_graph = RLScheduler(agent).schedule(
         state,
-        prompt_id=int(row["prompt_id"])
+        prompt_id=prompt_index + 1
     )
 
     print("\nRL SCHEDULER")
     print("------------")
     print("DQN action:", action)
     print("Strategy:", strategy.strategy_name)
-
-    print("\nRL Execution Graph:")
-    for node in rl_graph.nodes:
-
-        partition = rl_graph.nodes[node].get(
-            "partition",
-            "not assigned"
-        )
-
-        print(
-            f"{node:10s} -> Partition {partition}"
-        )
+    print_graph(rl_graph)
 
 
 if __name__ == "__main__":

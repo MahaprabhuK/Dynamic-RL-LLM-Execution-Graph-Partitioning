@@ -1,0 +1,66 @@
+﻿
+Excluding 2 context(s) with paging stalls (a run > 2.0x the scenario median): [1, 34]. Raw data is kept in adaptive_runs_v4.csv.
+
+================================================================================
+MEAN LATENCY BY SCENARIO AND CONDITION (seconds)
+================================================================================
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+relief           20.98            19.09              17.96        19.68    20.61          19.62   20.16
+spike            24.75            22.69              22.70        24.04    24.63          24.86   24.17
+steady_heavy     25.21            24.20              23.27        25.13    25.16          25.25   27.33
+steady_idle      19.60            17.29              17.18        17.52    17.77          17.46   17.27
+
+PAIRED DIFFERENCES: bandit_adaptive VS OTHERS (negative = bandit_adaptive faster)
+    scenario          baseline  num_contexts  mean_diff_seconds  ci95_low  ci95_high  mean_diff_percent  significant
+      relief          balanced             9            -1.8949   -2.3450    -1.4812              -8.96         True
+       spike          balanced            10            -2.0553   -3.0734    -1.2252              -7.81         True
+steady_heavy          balanced             9            -1.0119   -1.7971    -0.2085              -4.11         True
+ steady_idle          balanced            10            -2.3129   -2.7386    -1.7260             -11.94         True
+      relief latency_optimized             9             1.1272    0.5996     1.5986               6.34         True
+       spike latency_optimized            10            -0.0101   -1.2746     1.1485               1.27        False
+steady_heavy latency_optimized             9             0.9325    0.1526     1.6866               4.48         True
+ steady_idle latency_optimized            10             0.1108   -0.6768     0.9771               1.31        False
+      relief       rl_adaptive             9            -0.5887   -1.6515     0.1915              -2.55        False
+       spike       rl_adaptive            10            -1.3442   -2.5937    -0.2729              -4.88         True
+steady_heavy       rl_adaptive             9            -0.9320   -1.6923    -0.1747              -3.79         True
+ steady_idle       rl_adaptive            10            -0.2355   -0.8750     0.4505              -1.38        False
+      relief           rl_once             9            -1.5254   -2.5535    -0.5405              -6.99         True
+       spike           rl_once            10            -1.9344   -2.3597    -1.4724              -7.75         True
+steady_heavy           rl_once             9            -0.9583   -2.2237     0.5292              -3.84        False
+ steady_idle           rl_once            10            -0.4834   -1.2827     0.2715              -2.21        False
+      relief     rule_adaptive             9            -0.5297   -1.0009    -0.0832              -2.65         True
+       spike     rule_adaptive            10            -2.1719   -3.3676    -1.0335              -7.93         True
+steady_heavy     rule_adaptive             9            -1.0477   -1.8162    -0.3005              -4.19         True
+ steady_idle     rule_adaptive            10            -0.1760   -0.5599     0.4017              -1.02        False
+      relief            static             9            -1.0766   -2.0590    -0.3593              -4.98         True
+       spike            static            10            -1.4835   -1.9249    -1.0919              -6.18         True
+steady_heavy            static             9            -3.1351   -5.3531    -1.3466             -11.26         True
+ steady_idle            static            10             0.0175   -0.5342     0.7226              -0.09        False
+
+MEAN REGRET VS BEST FIXED STRATEGY IN HINDSIGHT, PER CONTEXT (seconds)
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+relief            3.02             1.13               0.00         1.72     2.65           1.66    2.20
+spike             2.37             0.31               0.32         1.66     2.25           2.48    1.80
+steady_heavy      2.22             1.21               0.27         2.14     2.16           2.25    4.34
+steady_idle       2.94             0.62               0.51         0.86     1.11           0.80    0.61
+
+MEAN STRATEGY SWITCHES PER REQUEST
+condition     balanced  bandit_adaptive  latency_optimized  rl_adaptive  rl_once  rule_adaptive  static
+scenario                                                                                               
+relief             0.0             2.89                0.0         1.44      0.0           1.33     0.0
+spike              0.0             3.40                0.0         1.10      0.0           0.90     0.0
+steady_heavy       0.0             2.44                0.0         0.11      0.0           0.11     0.0
+steady_idle        0.0             3.00                0.0         0.40      0.0           0.00     0.0
+
+ONLINE BANDIT LEARNING: mean regret, first vs second half of the run (seconds)
+  first half  bandit_adaptive=0.94  rl_adaptive=1.65  rl_once=1.96
+  second half bandit_adaptive=0.66  rl_adaptive=1.50  rl_once=2.08
+
+Identical generated tokens across all conditions: 100% of contexts
+Mean decision overhead per request: 0.0020s
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_latency_by_scenario_v4.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_paired_diffs_v4.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_spike_timeline_v4.png
+Generated plot: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\results\adaptive_relief_timeline_v4.png

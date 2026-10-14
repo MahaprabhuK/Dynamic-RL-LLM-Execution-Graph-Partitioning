@@ -1,0 +1,7 @@
+prompt_id,rl_action_id,rl_strategy,rl_latency,rl_reward,static_latency,balanced_latency,latency_opt_latency,oracle_strategy,oracle_latency
+2,2,latency_optimized,26.0842,-0.6112629999999999,29.1185,24.7807,26.0842,latency_optimized,26.0842
+3,2,latency_optimized,26.5045,-0.6409675,31.9117,25.6973,26.5045,balanced,25.6973
+5,2,latency_optimized,26.4065,-0.6498975,28.8431,27.2028,26.4065,balanced,27.2028
+9,2,latency_optimized,25.8298,-0.650047,25.5251,26.4628,25.8298,static,25.5251
+14,2,latency_optimized,26.6059,-0.6358885000000001,27.2509,25.0803,26.6059,latency_optimized,26.6059
+18,2,latency_optimized,10.678,-0.5053700000000001,32.1118,28.2243,10.678,latency_optimized,10.678
