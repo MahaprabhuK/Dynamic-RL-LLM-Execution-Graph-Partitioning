@@ -94,3 +94,15 @@
   (4.48 h without paging-flagged runs in the medians).
 - run_main_v7.cmd: check_machine -> cpu_capacity_check -> sanity_resume -> run_v7.py --resume, log in
   logs/main_v7_<date>.log. Abort path tested (stops at the CPU check); run_v7.py not started.
+
+## Power settings changed for the main run (2026-10-17 ~17:49) - REVERT AFTER THE MAIN RUN
+- Scheme: Balanced (381b4222-f694-41f0-9685-ff5bb260df2e), subgroup SUB_PROCESSOR, AC only. DC untouched.
+- CPMINCORES (0cc5b647-c1df-4637-891a-dec35c318583, core parking min cores): AC 4 -> 100.
+- HETEROPOLICY (7f2f5cfa-f10c-4823-b5e1-e93ae85f46b5): AC set to 0, but it was already 0 (no change).
+- Both aliases were recognised; no GUIDs needed. Full before/after: experiments/powercfg_before.txt,
+  experiments/powercfg_after.txt (plain /query hides these settings, so both files also hold /qh output).
+- Revert:
+    powercfg /setacvalueindex scheme_current sub_processor CPMINCORES 4
+    powercfg /setactive scheme_current
+- Effect: none. After the change cpu_capacity_check still 36.1 % (cpu12-15 at 100 %, cpu0-11 5-30 %);
+  sanity_resume threads_2 1.19 / balanced 1.07 s/tok, RAM 82.8-88.0 %. Both FAIL; main run not started.
