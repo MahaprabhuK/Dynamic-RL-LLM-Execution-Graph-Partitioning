@@ -76,3 +76,21 @@
   two nights) written by build_e4_plan.py.
 - Next: Stage 7 main run (needs user go-ahead, free RAM, ideally
   CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1 or run outside Claude Code).
+
+## Stage 7 resume prep (2026-10-17)
+- Main run stopped at 67/675 on 13 Oct (inside context 8, prompt 22 ramp). Committed unchanged (957fccd).
+- a63992a (hardware-aware balanced test) reverted (a91ee8a); 94 tests pass with HF_HUB_OFFLINE=1.
+- experiments/check_main_partial.txt: all checks PASS (commit ecec5690ce, clean tree, code diff empty,
+  token IDs identical per context, fixed arms 0 switches / 0 emergencies); 18/67 paging-flagged, 0 skips.
+- experiments/machine_v7.json + check_machine.py (machine fingerprint gate).
+- Sanity gate FAILED: threads_2 1.04 s/tok, balanced 1.05 s/tok at 10 workers (sweep 0.118 / 0.107).
+- experiments/cpu_capacity_check.txt: 16 busy workers reach only ~37 % total CPU; logical CPUs 12-15 at
+  100 %, 0-11 at 7-37 %. AC core parking min cores = 4 % (Balanced scheme). Machine not usable until fixed.
+- 123.9 s cores_heuristic ramp run (ctx 8): memory pressure / paging, not a policy or code bug. Arms follow
+  the measured external CPU; tokens 70-159 run at 0.3-2.9 s/tok while RAM is 86-89 % after a 74k
+  pages-input burst, and the whole machine stalls (total CPU 27-40 % with 8 workers); recovers at RAM 84 %.
+- experiments/resume_plan_v7.txt: seeded order rebuilt and matches all 67 rows; 608 runs remain, starting
+  with ctx 8 (static, rl_adaptive, bandit_adaptive, latency_optimized, balanced). Estimate 5.39 h
+  (4.48 h without paging-flagged runs in the medians).
+- run_main_v7.cmd: check_machine -> cpu_capacity_check -> sanity_resume -> run_v7.py --resume, log in
+  logs/main_v7_<date>.log. Abort path tested (stops at the CPU check); run_v7.py not started.
