@@ -106,3 +106,29 @@
     powercfg /setactive scheme_current
 - Effect: none. After the change cpu_capacity_check still 36.1 % (cpu12-15 at 100 %, cpu0-11 5-30 %);
   sanity_resume threads_2 1.19 / balanced 1.07 s/tok, RAM 82.8-88.0 %. Both FAIL; main run not started.
+
+## Power fixes by the user (2026-10-17, after ~17:53) - REVERT AFTER THE MAIN RUN
+- Balanced scheme, SUB_PROCESSOR, AC values (confirmed with powercfg /qh on 2026-10-18; DC untouched):
+  CPMINCORES 4 -> 100, CPMINCORES1 0 -> 100, CPMAXCORES1 -> 100, HETEROPOLICY -> 0, SHORTSCHEDPOLICY -> 0.
+  Previous values of CPMAXCORES1, HETEROPOLICY and SHORTSCHEDPOLICY were not recorded (HETEROPOLICY was
+  already 0, see above).
+- Power throttling disabled for .venv\Scripts\python.exe and
+  C:\Users\Mahaprabhu K\AppData\Local\Programs\Python\Python313\python.exe (as reported by the user;
+  powercfg /powerthrottling list needs admin, not checked here).
+- Effect: all-core use and 13 Oct speed restored. cpu_capacity_check 2026-10-17 18:21: 100.0 % total
+  CPU with 16 workers, every core at 100 % (PASS). sanity_resume (commit 6dc2fb4eca): threads_2
+  0.1285 s/tok (+8.9 %), balanced 0.1144 s/tok (+7.0 %) vs sweep, both PASS. Its RAM check FAILED
+  (87.5 / 87.3 / 86.7 / 86.0 % before each run, limit 85 %), so OVERALL is FAIL and run_main_v7.cmd
+  would stop at sanity_resume until RAM is below 85 %.
+
+## Plan amendment: prompts 21-30 (2026-10-18)
+- experiments/e4_plan.yaml: prompts 21-30 instead of 21-35 (10 contexts per scenario), total_runs
+  675 -> 450, entry under amendments. Reason: limited hardware time. Decided before any analysis of
+  main-run outcomes; analysis family, conditions, scenarios and seeds unchanged. night_1 / night_2
+  left as they were (night_2 still says 29-35); the run now goes in three sessions.
+- Resume check: run_v7.py draws the order prompt by prompt, so the amended plan's 450-run order equals
+  the first 450 rows of the old order; all 67 rows on disk match context_id and run_order.
+- run_main_v7.cmd takes an optional prompt list (run_main_v7.cmd 22,23,24 -> run_v7.py --prompts);
+  prompts outside the plan stop it before the checks. The three checks still run first.
+- experiments/resume_plan_v7.txt: 383 runs left, 3.40 h (2.82 h without paging-flagged medians).
+  Sessions: 22-24 113 runs 1.02 h, 25-27 135 runs 1.19 h, 28-30 135 runs 1.19 h.

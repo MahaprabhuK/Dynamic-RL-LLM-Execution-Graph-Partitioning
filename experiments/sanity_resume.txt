@@ -1,13 +1,13 @@
-Pre-resume sanity check (experiments/sanity_resume.py), commit 3c7e46cb26
+Pre-resume sanity check (experiments/sanity_resume.py), commit 6dc2fb4eca
 prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
 
  order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
-     0 threads_2              1.367355           51.125                27.91                82.8               2769.3 2026-10-17T17:50:35
-     1  balanced              1.046046           37.772                25.83                87.1               2071.6 2026-10-17T17:51:27
-     2  balanced              1.087367           39.732                29.92                86.8               2117.3 2026-10-17T17:52:06
-     3 threads_2              1.015585           29.211                47.56                88.0               1929.6 2026-10-17T17:52:47
+     0 threads_2              0.132572            5.072                76.58                87.5               2000.6 2026-10-17T18:22:41
+     1  balanced              0.112292            4.136                70.58                87.3               2042.9 2026-10-17T18:22:47
+     2  balanced              0.116595            4.205                72.35                86.7               2139.0 2026-10-17T18:22:52
+     3 threads_2              0.124366            4.769                67.84                86.0               2250.8 2026-10-17T18:22:58
 
-[FAIL] threads_2: 1.1915 s/tok vs sweep 0.118 (+909.7%, limit +/-25%)
-[FAIL] balanced: 1.0667 s/tok vs sweep 0.107 (+896.9%, limit +/-25%)
-[FAIL] RAM before each run < 85 %: [82.8, 87.1, 86.8, 88.0]
+[PASS] threads_2: 0.1285 s/tok vs sweep 0.118 (+8.9%, limit +/-25%)
+[PASS] balanced: 0.1144 s/tok vs sweep 0.107 (+7.0%, limit +/-25%)
+[FAIL] RAM before each run < 85 %: [87.5, 87.3, 86.7, 86.0]
 OVERALL: FAIL

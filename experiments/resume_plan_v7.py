@@ -20,7 +20,8 @@ PLAN = yaml.safe_load((ROOT / "experiments" / "e4_plan.yaml").read_text(encoding
 RUNS = ROOT / "data" / "processed" / f"v7runs_{PLAN['tag']}.csv"
 OUT = ROOT / "experiments" / "resume_plan_v7.txt"
 MARGIN = 0.15
-NIGHT_1 = set(range(21, 29))
+EXPECTED_REMAINING = 383  # 450 planned (amendment 2026-10-18) - 67 done
+SESSIONS = {"22-24": [22, 23, 24], "25-27": [25, 26, 27], "28-30": [28, 29, 30]}  # run_main_v7.cmd 22,23,24 etc.
 
 
 def plan_order(plan):
@@ -52,16 +53,19 @@ def main():
                  f"{len(runs)} rows on disk")
     done = set(map(tuple, runs[key].values))
     remaining = order[[tuple(r) not in done for r in order[key].values]].reset_index(drop=True)
-    n_ok = len(remaining) == PLAN["total_runs"] - len(runs) == 608
+    n_ok = len(remaining) == PLAN["total_runs"] - len(runs) == EXPECTED_REMAINING
     lines.append(f"[{'PASS' if n_ok else 'FAIL'}] remaining runs: {len(remaining)} "
-                 f"({PLAN['total_runs']} planned - {len(runs)} done; expected 608)")
+                 f"({PLAN['total_runs']} planned - {len(runs)} done; expected {EXPECTED_REMAINING})")
+    in_sessions = remaining["prompt_id"].isin([p for ps in SESSIONS.values() for p in ps])
+    n_ok = n_ok and bool(in_sessions.all())
+    lines.append(f"[{'PASS' if in_sessions.all() else 'FAIL'}] sessions {', '.join(SESSIONS)} cover all remaining "
+                 f"runs ({int((~in_sessions).sum())} outside)")
     first = remaining[remaining["context_id"] == remaining["context_id"].iloc[0]]
     lines.append(f"--resume starts at context {first['context_id'].iloc[0]} (prompt {first['prompt_id'].iloc[0]}, "
                  f"{first['scenario'].iloc[0]}): {first['condition'].tolist()} (in run order), then context "
                  f"{first['context_id'].iloc[0] + 1}")
-    lines.append(f"remaining by night: night 1 (prompts 21-28) "
-                 f"{int(remaining['prompt_id'].isin(NIGHT_1).sum())}, night 2 (prompts 29-35) "
-                 f"{int((~remaining['prompt_id'].isin(NIGHT_1)).sum())}")
+    lines.append("remaining by session: " + ", ".join(
+        f"prompts {name} {int(remaining['prompt_id'].isin(ps).sum())}" for name, ps in SESSIONS.items()))
     lines.append("")
 
     # Time estimate
@@ -85,9 +89,11 @@ def main():
     lines.append(f"Cells with no finished run (scenario median used): "
                  f"{list(map(tuple, missing.values)) if len(missing) else 'none'}")
     lines.append(f"Median gap between runs (end -> next start, includes 1 s settle and CSV writes): {gap:.1f} s")
-    lines.append(f"Estimate: {len(remaining)} runs, {base / 3600:.2f} h + {MARGIN:.0%} = {total / 3600:.2f} h "
-                 f"(night 1: {remaining.loc[remaining['prompt_id'].isin(NIGHT_1), 'est_seconds'].sum() * (1 + MARGIN) / 3600:.2f} h, "
-                 f"night 2: {remaining.loc[~remaining['prompt_id'].isin(NIGHT_1), 'est_seconds'].sum() * (1 + MARGIN) / 3600:.2f} h)")
+    lines.append(f"Estimate: {len(remaining)} runs, {base / 3600:.2f} h + {MARGIN:.0%} = {total / 3600:.2f} h")
+    for name, ps in SESSIONS.items():
+        sel = remaining["prompt_id"].isin(ps)
+        lines.append(f"  session prompts {name} (run_main_v7.cmd {','.join(map(str, ps))}): {int(sel.sum())} runs, "
+                     f"{remaining.loc[sel, 'est_seconds'].sum() * (1 + MARGIN) / 3600:.2f} h")
     clean = runs[~runs["paging_flag"].astype(bool)]
     med_c = clean.groupby(["condition", "scenario"])["latency_seconds"].median()
     est_c = remaining.apply(lambda r: med_c.get((r["condition"], r["scenario"]), np.nan), axis=1)
@@ -95,8 +101,9 @@ def main():
     total_c = float((est_c + gap).sum()) * (1 + MARGIN)
     lines.append(f"Sensitivity (paging-flagged runs left out of the medians; n=1-2 per cell, so single outliers "
                  f"such as static ramp 163 s set the median for 15 cells): {total_c / 3600:.2f} h")
-    lines.append("Assumes the machine runs at the speed of 13 Oct (not the throttled state of 17 Oct) and no "
-                 "RAM-guard waits (each skip costs up to 10 x 30 s).")
+    lines.append("Assumes the machine runs at the speed of 13 Oct (restored by the 17 Oct power fixes; sanity "
+                 "+7 to +9 %) and no RAM-guard waits (each skip costs up to 10 x 30 s). Session times exclude the "
+                 "~2 min of checks and model warm-up before each session.")
     lines.append("")
     lines.append("Remaining cells (context_id, prompt, scenario, run_order, condition):")
     lines.append(remaining[["context_id", "prompt_id", "scenario", "run_order", "condition"]].to_string(index=False))
