@@ -166,3 +166,15 @@
   scenario, bandit descriptive, DQN generalisation wording, Wilcoxon column, provenance, threats to validity
   incl. 17 Oct power fix). experiments/analyze_main_v7.py supplement (e4_supplement.txt, e4_best_fixed.csv,
   e4_by_date.csv). project_report.html kept, marked superseded.
+
+## Final report fixes (2026-10-19 afternoon)
+- Section 15.2 v6 sweep table regenerated from load_sweep_v6.csv by experiments/build_report_tables.py (40 of 48 cells
+  had differed at 4 decimals; fastest budgets and 8.4x / 12.0x ratios unchanged); correction note added.
+- Summary rewritten for the v7 setup; abstract; related work and references (experiments/reference_check.md;
+  Hu et al. INFOCOM 2019 not cited because the paper could not be opened).
+- experiments/check_report_numbers.py: 283 table cells strict + 1185 text numbers matched, 181 structural, 0 unmatched.
+  It found and the report now fixes: two v7 roundings (Wilcoxon 0.105, CI 8.38), v4 sweep 0.2154, the v5 context 14/36
+  sentence (rl_adaptive hit the cliff only in context 36), an unreproducible v4 switch count (53 of 114), and my own
+  bandit-vs-rule_lookup bounds.
+- RESULTS.md (generated), MODELS.md (dqn_model_v7.pth force-added), ENVIRONMENT.md, untracked_files.md, README rewritten.
+- Tests: 94 passed with HF_HUB_OFFLINE=1 (incl. real-model equivalence).

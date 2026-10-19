@@ -47,6 +47,8 @@
 <tr><td>Hardware</td><td>Laptop, 10 physical / 16 logical CPU cores, 16 GB RAM (RTX 3050 present but unused; torch is a CPU build)</td></tr>
 </table>
 
+<h2>Abstract</h2>
+<p>On a single CPU machine, the fastest number of threads for LLM inference depends on how busy the machine is, and that can change while a response is being generated. We test whether re-deciding the thread budget every 10 tokens helps, using TinyLlama-1.1B (fp32) on a 10-core / 16-thread laptop with synthetic background load. In a pre-registered run of 450 requests of 200 tokens (10 prompts &times; 5 load scenarios &times; 9 conditions), a lookup table built from a load sweep on the same machine (<code>rule_lookup</code>) was 0.1% to 4.8% faster than the best fixed thread budget in each scenario, chosen in hindsight from the same data, and faster in all 10 contexts when load arrived mid-request. Against the fixed <code>balanced</code> and <code>threads_2</code> arms it was up to 13% and 20% faster; 15 of 20 pre-registered paired t-tests were significant after Holm correction. An online bandit warm-started from the same sweep nearly tied it. A DQN trained offline on the sweep was 10% to 60% slower than <code>rule_lookup</code> in four of five scenarios. 106 of 450 runs had paging events; removing them keeps every effect direction. Policies built from direct measurements of the machine were the most reliable.</p>
 <div class="warn"><b>Statistical correction (12 October 2026).</b> The original v5 prose used latency-only outlier exclusions and unadjusted interval-based significance labels. The source CSV has no independent paging telemetry. The v5r reanalysis in <code>data/processed/adaptive_report_v5r.txt</code> retains all 40 contexts, reports paired t and Wilcoxon tests with Holm-adjusted p-values, and supersedes the original v5 inferential claims below. Earlier v3/v4 significance labels are historical and have not been recomputed here.</div>
 
 <h2>Contents</h2>
@@ -67,12 +69,14 @@
 <li>Limitations and open problems</li>
 <li>Implementation status, v6 load sweep, and deferred experiments</li>
 <li>Phase 8 (v7): pre-registered main run</li>
+<li>Related work</li>
+<li>References</li>
 <li>Appendix: files, commands and data index</li>
 </ol>
 
 <h2>1. Summary</h2>
-<p>The project builds a scheduler that decides, for each LLM request on a single CPU machine, how the model should be executed. TinyLlama-1.1B runs layer by layer through a hand-written decode loop. The action space is three thread budgets: {3, 6, 10} threads. Layer staging is the execution mechanism used to enforce these budgets across the 22 decoder layers: <code>static</code> executes all 22 layers in a single stage with 10 threads; <code>latency_optimized</code> executes all 22 layers in a single stage with 6 threads; and <code>balanced</code> splits the layers into two sequential stages (layers 0-10 and 11-21) executed one after the other at 3 threads each, running at a 3-thread budget throughout generation. Because execution is single-device CPU inference, stages run sequentially without parallel pipelining. All three strategies yield token-identical output to Hugging Face <code>model.generate()</code>, so the choice only affects latency.</p>
-<p>The work went through seven phases. The early versions (v1/v2) produced results that turned out to be noise, because the strategies were computationally identical and were measured one after another. v3 fixed both problems. Strategies now differ in thread budgets {3, 6, 10}, and measurements are paired and randomized under controlled background CPU load. A contextual-bandit DQN was then trained on the v3 data. After that the project moved to its main idea, <b>re-deciding the strategy every 10 tokens during generation</b>, plus an online bandit that keeps learning from measured token latency.</p>
+<p>The project builds a scheduler that decides, while an LLM response is being generated on a single CPU machine, how many threads the model should use. TinyLlama-1.1B (fp32) runs layer by layer through a hand-written decode loop with one shared KV cache, so the thread budget can change between tokens without changing the output: token IDs are identical across all arms. In the final setup (v7, section 16) the arms are single-stage budgets of 2, 3, 4, 6 and 10 threads (<code>threads_2</code> ... <code>threads_10</code>) plus <code>balanced</code> (two sequential stages of 3 threads). Four fixed arms (<code>threads_2</code>, <code>balanced</code>, <code>latency_optimized</code> = 6 threads, <code>static</code> = 10 threads) are compared with five policies that re-decide every 10 tokens from measured external CPU load: <code>rule_lookup</code> (a lookup table from a load sweep on this machine), <code>cores_heuristic</code> (10 minus the busy logical CPUs, not fitted to data), <code>rl_adaptive</code> (a DQN trained offline on the same sweep), <code>bandit_adaptive</code> (an online bandit warm-started from the sweep) and <code>rule_v5</code> (the earlier 60% threshold rule). Versions v3-v5 used three arms, <code>static</code> (10 threads), <code>latency_optimized</code> (6) and <code>balanced</code> (3+3); they are described as history in sections 4-11.</p>
+<p>The work went through eight phases. The early versions (v1/v2) produced results that turned out to be noise, because the strategies were computationally identical and were measured one after another. v3 fixed both problems: strategies differ in thread budget, and measurements are paired and randomized under controlled background CPU load. The project then moved to its main idea, <b>re-deciding the thread budget every 10 tokens during generation</b>, tested with a DQN and an online bandit in v3-v5, and finally in a pre-registered main run (v7) with a wider set of arms and policies.</p>
 <div class="box">
 <b>v7 main run (pre-registered, 450 runs; section 16)</b>
 <ul>
@@ -219,7 +223,7 @@
 <li>Limitation: one fixed strategy happened to be near-optimal everywhere, so the bandit only tied it in <code>spike</code> and <code>steady_idle</code> and was 4-6% slower in <code>relief</code> and <code>steady_heavy</code>. That is the cost of exploration (about 3 switches per request).</li>
 <li>Decision overhead fell from 0.21 s (v3) to 0.002 s per request.</li>
 </ul>
-<p>v4 diagnostics motivated changes to the bandit: unusually slow segments were rejected under a latency-based rule, and readings near a bin edge were associated with 53 of 114 switches. The available CSV does not prove those slow segments were paging stalls, nor that bin-edge noise caused every counted switch. The resulting implementation added outlier rejection, bin hysteresis, slower forgetting (discount 0.98), and a smaller exploration bonus (0.08).</p>
+<p>v4 diagnostics motivated changes to the bandit: unusually slow segments were rejected under a latency-based rule, and many switches happened at readings near a bin edge (the count quoted in earlier versions of this report cannot be reproduced from the committed CSVs, which record 121 bandit switches in v4). The available CSV does not prove those slow segments were paging stalls, nor that bin-edge noise caused every counted switch. The resulting implementation added outlier rejection, bin hysteresis, slower forgetting (discount 0.98), and a smaller exploration bonus (0.08).</p>
 <figure><img src="../../results/adaptive_paired_diffs_v4.png"><figcaption>Figure 2. v4 paired differences of the online bandit against every other condition (negative = bandit faster).</figcaption></figure>
 
 <h2>10. Phase 6: load sweep</h2>
@@ -233,7 +237,7 @@
 <tr><td class="n">8</td><td class="n">0.1099</td><td class="n">0.0965</td><td class="n">0.1072</td><td>latency_optimized</td></tr>
 <tr><td class="n">10</td><td class="n">0.1223</td><td class="n">0.1135</td><td class="n">0.1087</td><td>balanced</td></tr>
 <tr class="bad"><td class="n">12</td><td class="n">2.1352</td><td class="n">0.1510</td><td class="n">0.1157</td><td>balanced (static 18x slower)</td></tr>
-<tr class="bad"><td class="n">14</td><td class="n">3.0548</td><td class="n">0.8520</td><td class="n">0.2155</td><td>balanced</td></tr>
+<tr class="bad"><td class="n">14</td><td class="n">3.0548</td><td class="n">0.8520</td><td class="n">0.2154</td><td>balanced</td></tr>
 </table>
 <p class="small">Decode seconds per token, mean of 2 repeats (<code>data/processed/load_sweep_v4.csv</code>). External CPU readings: 7-49% at 0-6 workers, 54-60% at 8, 66-89% at 10-14.</p>
 <p>The sweep shows three distinct thread-budget regimes and an oversubscription cliff. Up to 6 workers, all thread budgets are within about 15% of each other. At 8 workers, 6 threads (<code>latency_optimized</code>) wins. At 10-14 workers, 3 threads (<code>balanced</code>, running 3+3 threads sequentially) wins. At 12 workers, 10 threads (<code>static</code>) collapses because 10 inference threads plus 12 busy processes oversubscribe 16 logical cores (~18x slower per token than 3 threads). These regimes set the v5 bandit bin edges (51%, 63%) and the rule threshold (60%).</p>
@@ -310,7 +314,7 @@
 <tr><td>spike: rule_adaptive vs balanced</td><td class="n">+21.7 s</td><td class="n">0.0057</td><td class="n">0.126</td><td>not significant</td></tr>
 <tr><td>rl_adaptive vs rule_adaptive (all 5 scenarios)</td><td class="n">-0.6 to +4.8 s</td><td class="n">&gt;= 0.297</td><td class="n">1.000</td><td>not significant</td></tr>
 </table>
-<p>Excluding contexts 14 and 36 removed instances where <code>rl_adaptive</code> hit the cliff and <code>rl_once</code> avoided it (63.0 s and 58.3 s), inflating the reported benefit of re-deciding. In all contexts, <code>rl_adaptive</code> is 16% slower than fixed <code>balanced</code> in ramp.</p>
+<p>Excluding contexts 14 and 36 moves the ramp comparison of <code>rl_adaptive</code> and <code>rl_once</code> in opposite directions. In context 36 <code>rl_adaptive</code> hit the cliff and <code>rl_once</code> did not (167.7 s vs 58.3 s). In context 14 <code>rl_adaptive</code> was faster (53.8 s vs 63.0 s). (Earlier versions of this report said <code>rl_adaptive</code> hit the cliff in both.) The net effect enlarges the apparent benefit of re-deciding (-334.6 s in the sensitivity set vs -238.40 s with all contexts). In all contexts, <code>rl_adaptive</code> is 16% slower than fixed <code>balanced</code> in ramp.</p>
 
 <div class="warn">Corrected reading of v5: with all 40 contexts retained and Holm adjustment over the 30 comparisons, the data does not establish that <code>rl_adaptive</code> outperforms the best fixed or rule baseline. Re-deciding DQN and the 60% threshold rule are statistically indistinguishable. The gain comes from intra-generation re-deciding, not from learning.</div>
 <h2>12. Methodology and statistics</h2>
@@ -368,17 +372,21 @@
 <h3>15.2 v6 Load sweep results (P1.4)</h3>
 <p>The 144-run full factorial load sweep was completed across 8 background worker levels (0 to 14 workers) &times; 3 repeats &times; 6 single-stage thread budgets ({2, 4, 6, 8, 10, 12} threads), evaluated at 50 tokens per run using Prompt 1 (<code>data/processed/load_sweep_v6.csv</code>). The empirical decode latency per token (seconds/token) is summarized below:</p>
 
+<p class="small"><b>Correction (19 October 2026):</b> the table in earlier versions of this report did not match <code>load_sweep_v6.csv</code> (40 of 48 cells differed at the printed 4 decimals, e.g. 1.2592 s/token at 8 workers / 10 threads where the CSV mean is 0.2176). It is now generated from the CSV; the fastest budget per row and the 8.4&times; / 12.0&times; ratios are unchanged.</p>
+<!-- BEGIN v6_sweep_table (generated by experiments/build_report_tables.py) -->
 <table>
-<tr><th>Load workers</th><th>2 threads</th><th>4 threads</th><th>6 threads</th><th>8 threads</th><th>10 threads</th><th>12 threads</th><th>Optimal budget</th></tr>
-<tr><td>0 (idle)</td><td>0.3340 s</td><td>0.2185 s</td><td>0.1798 s</td><td>0.1691 s</td><td><b>0.1673 s</b></td><td>0.1729 s</td><td><b>10 threads</b></td></tr>
-<tr><td>2 workers</td><td>0.3475 s</td><td>0.2223 s</td><td>0.1818 s</td><td><b>0.1739 s</b></td><td>0.1784 s</td><td>0.2312 s</td><td><b>8 threads</b></td></tr>
-<tr><td>4 workers</td><td>0.3541 s</td><td>0.2238 s</td><td><b>0.1755 s</b></td><td>0.1802 s</td><td>0.1989 s</td><td>0.3664 s</td><td><b>6 threads</b></td></tr>
-<tr><td>6 workers</td><td>0.3582 s</td><td><b>0.2248 s</b></td><td>0.2255 s</td><td>0.2831 s</td><td>0.3804 s</td><td>0.6627 s</td><td><b>4 threads</b></td></tr>
-<tr><td>8 workers</td><td><b>0.3701 s</b></td><td>0.3821 s</td><td>0.5471 s</td><td>0.8920 s</td><td>1.2592 s</td><td>1.5973 s</td><td><b>2 threads</b></td></tr>
-<tr><td>10 workers</td><td><b>0.3854 s</b></td><td>0.6582 s</td><td>1.1824 s</td><td>1.8214 s</td><td>2.2981 s</td><td>2.6710 s</td><td><b>2 threads</b></td></tr>
-<tr><td>12 workers</td><td><b>0.3974 s</b></td><td>0.9821 s</td><td>1.8923 s</td><td>2.6105 s</td><td>3.3200 s</td><td>3.7812 s</td><td><b>2 threads</b> (8.4&times; faster than 10 thr)</td></tr>
-<tr><td>14 workers</td><td><b>0.4088 s</b></td><td>1.3412 s</td><td>2.7819 s</td><td>3.8921 s</td><td>4.8968 s</td><td>5.4210 s</td><td><b>2 threads</b> (12.0&times; faster than 10 thr)</td></tr>
+<tr><th>Load workers</th><th class="n">2 threads</th><th class="n">4 threads</th><th class="n">6 threads</th><th class="n">8 threads</th><th class="n">10 threads</th><th class="n">12 threads</th><th>Fastest budget</th></tr>
+<tr><td>0 (idle)</td><td class="n">0.1928</td><td class="n">0.1877</td><td class="n">0.1737</td><td class="n">0.1691</td><td class="n"><b>0.1673</b></td><td class="n">0.1820</td><td><b>10 threads</b></td></tr>
+<tr><td>2</td><td class="n">0.2077</td><td class="n">0.1830</td><td class="n">0.1841</td><td class="n"><b>0.1739</b></td><td class="n">0.1782</td><td class="n">0.1770</td><td><b>8 threads</b></td></tr>
+<tr><td>4</td><td class="n">0.1987</td><td class="n">0.1889</td><td class="n"><b>0.1755</b></td><td class="n">0.1926</td><td class="n">0.1877</td><td class="n">0.1902</td><td><b>6 threads</b></td></tr>
+<tr><td>6</td><td class="n">0.1911</td><td class="n"><b>0.1748</b></td><td class="n">0.1862</td><td class="n">0.1988</td><td class="n">0.1985</td><td class="n">0.1896</td><td><b>4 threads</b></td></tr>
+<tr><td>8</td><td class="n"><b>0.2035</b></td><td class="n">0.2305</td><td class="n">0.2215</td><td class="n">0.2459</td><td class="n">0.2176</td><td class="n">0.2261</td><td><b>2 threads</b></td></tr>
+<tr><td>10</td><td class="n"><b>0.2421</b></td><td class="n">0.2637</td><td class="n">0.5135</td><td class="n">0.7101</td><td class="n">0.5361</td><td class="n">0.2711</td><td><b>2 threads</b></td></tr>
+<tr><td>12</td><td class="n"><b>0.3974</b></td><td class="n">0.8677</td><td class="n">2.8918</td><td class="n">3.1306</td><td class="n">3.3200</td><td class="n">3.2864</td><td><b>2 threads</b> (8.4&times; faster than 10 threads)</td></tr>
+<tr><td>14</td><td class="n"><b>0.4088</b></td><td class="n">1.1876</td><td class="n">4.8610</td><td class="n">4.8122</td><td class="n">4.8968</td><td class="n">5.4555</td><td><b>2 threads</b> (12.0&times; faster than 10 threads)</td></tr>
 </table>
+<p class="small">Mean decode seconds per token over 3 repeats per cell, generated from <code>data/processed/load_sweep_v6.csv</code> (144 runs) by <code>experiments/build_report_tables.py</code>.</p>
+<!-- END v6_sweep_table -->
 
 <h3>15.3 DQN v6 training and offline validation</h3>
 <p>Contextual-bandit DQN training (gamma = 0) was executed on <code>data/processed/training_data_v6.csv</code> (144 rows, 24 paired contexts). Prompts 21-40 remained strictly held out.</p>
@@ -442,7 +450,7 @@
 <table>
 <tr><th>a vs b</th><th>Scenario</th><th class="n">Mean diff (s)</th><th class="n">%</th><th>95% CI (s)</th><th class="n">Holm p (t)</th><th class="n">Wilcoxon p (raw)</th><th>Verdict (Holm t)</th></tr>
 <tr><td rowspan="5">rule_lookup vs balanced</td><td>steady_idle</td><td class="n">-2.53</td><td class="n">-13.4</td><td>[-2.69, -2.39]</td><td class="n">&lt;0.0001</td><td class="n">0.002</td><td>significant</td></tr>
-<tr><td>steady_heavy</td><td class="n">-0.44</td><td class="n">-1.9</td><td>[-0.91, 0.07]</td><td class="n">0.254</td><td class="n">0.106</td><td>not significant</td></tr>
+<tr><td>steady_heavy</td><td class="n">-0.44</td><td class="n">-1.9</td><td>[-0.91, 0.07]</td><td class="n">0.254</td><td class="n">0.105</td><td>not significant</td></tr>
 <tr><td>spike</td><td class="n">-1.08</td><td class="n">-4.8</td><td>[-1.47, -0.74]</td><td class="n">0.0038</td><td class="n">0.002</td><td>significant</td></tr>
 <tr><td>relief</td><td class="n">-1.84</td><td class="n">-8.9</td><td>[-2.04, -1.65]</td><td class="n">&lt;0.0001</td><td class="n">0.002</td><td>significant</td></tr>
 <tr><td>ramp</td><td class="n">-0.54</td><td class="n">-2.4</td><td>[-0.85, -0.20]</td><td class="n">0.053</td><td class="n">0.020</td><td>not significant</td></tr>
@@ -455,7 +463,7 @@
 <tr class="bad"><td>steady_heavy</td><td class="n">+4.85</td><td class="n">+20.9</td><td>[2.63, 7.20]</td><td class="n">0.021</td><td class="n">0.004</td><td>significant (DQN slower)</td></tr>
 <tr class="bad"><td>spike</td><td class="n">+3.01</td><td class="n">+14.1</td><td>[1.91, 4.30]</td><td class="n">0.0088</td><td class="n">0.002</td><td>significant (DQN slower)</td></tr>
 <tr class="bad"><td>relief</td><td class="n">+1.88</td><td class="n">+9.9</td><td>[1.32, 2.44]</td><td class="n">0.0016</td><td class="n">0.002</td><td>significant (DQN slower)</td></tr>
-<tr class="bad"><td>ramp</td><td class="n">+13.28</td><td class="n">+59.9</td><td>[8.39, 18.33]</td><td class="n">0.0059</td><td class="n">0.002</td><td>significant (DQN slower)</td></tr>
+<tr class="bad"><td>ramp</td><td class="n">+13.28</td><td class="n">+59.9</td><td>[8.38, 18.33]</td><td class="n">0.0059</td><td class="n">0.002</td><td>significant (DQN slower)</td></tr>
 <tr><td rowspan="5">cores_heuristic vs rule_lookup</td><td>steady_idle</td><td class="n">+0.25</td><td class="n">+1.5</td><td>[0.11, 0.40]</td><td class="n">0.053</td><td class="n">0.004</td><td>not significant</td></tr>
 <tr class="bad"><td>steady_heavy</td><td class="n">+2.31</td><td class="n">+9.9</td><td>[1.87, 2.68]</td><td class="n">&lt;0.0001</td><td class="n">0.002</td><td>significant (heuristic slower)</td></tr>
 <tr class="bad"><td>spike</td><td class="n">+2.32</td><td class="n">+10.9</td><td>[2.01, 2.66]</td><td class="n">&lt;0.0001</td><td class="n">0.002</td><td>significant (heuristic slower)</td></tr>
@@ -488,7 +496,7 @@
 
 <h3>16.7 Reading</h3>
 <ul>
-<li><b>Policies built on direct measurements of this machine beat the offline DQN.</b> rule_lookup (a lookup table from the load sweep) and bandit_adaptive (an online bandit warm-started from the same sweep) are both close to the per-segment oracle. rule_lookup is within 0.15 s of it in four scenarios and bandit_adaptive within 1.25 s; both are within 1.41 s in ramp. In mean latency they are within 1.2 s (5.5%) of each other in every scenario, with bandit_adaptive slightly ahead in ramp (21.96 vs 22.15 s) and rule_lookup ahead elsewhere. The bandit result is descriptive, since it was not in the test family.</li>
+<li><b>Policies built on direct measurements of this machine beat the offline DQN.</b> rule_lookup (a lookup table from the load sweep) and bandit_adaptive (an online bandit warm-started from the same sweep) are both close to the per-segment oracle. rule_lookup is within 0.15 s of it in four scenarios and bandit_adaptive within 1.23 s; both are within 1.41 s in ramp. In mean latency they differ by at most 1.18 s (5.6%, spike), with bandit_adaptive slightly ahead in ramp (21.96 vs 22.15 s) and rule_lookup ahead elsewhere. The bandit result is descriptive, since it was not in the test family.</li>
 <li><b>The DQN did not generalise across prompts.</b> It picked the best arm in 35% of held-out contexts offline, and online it was 10% to 60% slower than rule_lookup in four of five scenarios. It also switched far more (10.3 switches per request in steady_heavy vs 2.6). This is a result about this DQN, trained on 3 sweep prompts with this state; it is not evidence that learning-based scheduling loses in general.</li>
 <li>Re-deciding during generation pays off most when load changes mid-request: in spike, rule_lookup beat the best fixed arm in all 10 contexts. Under steady load the best fixed arm is almost as good, provided one knows in advance which arm that is.</li>
 <li>Fixed <code>static</code> (10 threads) still falls off the oversubscription cliff in ramp and is the worst arm under load. On an idle machine, 6 and 10 threads are within about 2% of each other.</li>
@@ -505,15 +513,30 @@
 
 <h3>16.9 Threats to validity</h3>
 <ul>
-<li><b>Power settings changed between sessions.</b> On 17 Oct the laptop gave only about 37% CPU to 16 busy workers (core parking in the Balanced scheme). The AC core-parking and scheduling settings were changed and python was exempted from power throttling before the 18-19 Oct session, so the 67 runs from 13 Oct and the 383 later runs were made under different power settings. The settings in force on 13 Oct were not recorded; the 17 Oct values before the change are in <code>experiments/powercfg_before.txt</code>. Gates guarded each resume: CPU capacity at 100% with 16 workers, and threads_2 and balanced within 25% of the sweep. The by-session comparison (16.8) shows fixed-arm speed within about 1% for most arms, but it rests on n = 1-2 runs per arm from 13 Oct.</li>
+<li><b>Power settings changed between sessions.</b> On 17 Oct the laptop gave only about 37% CPU to 16 busy workers. Changing core parking alone did not fix it; several AC core-parking and scheduling settings were then changed and python was exempted from power throttling before the 18-19 Oct session, so the 67 runs from 13 Oct and the 383 later runs were made under different power settings. The settings in force on 13 Oct were not recorded; the 17 Oct values before the change are in <code>experiments/powercfg_before.txt</code>. Gates guarded each resume: CPU capacity at 100% with 16 workers, and threads_2 and balanced within 25% of the sweep. The by-session comparison (16.8) shows fixed-arm speed within about 1% for most arms, but it rests on n = 1-2 runs per arm from 13 Oct.</li>
 <li><b>Uneven timing within contexts.</b> Pairing assumes all conditions of a context run close together. Context 8 spans 13 and 18 Oct. Context 9 (prompt 22, relief) ran 3 conditions on 18 Oct at 23:59 and 6 on 19 Oct at 08:44. Contexts 46-48 each span up to 2 hours because of RAM-guard skips.</li>
 <li><b>Memory pressure.</b> With the fp32 model loaded, RAM sat at 80-86%, and 106 of 450 runs had a paging event. The sensitivity analysis keeps every direction, but at n = 3-9.</li>
 <li><b>Plan amendment after the start.</b> The amendment to prompts 21-30 was made after 67 runs, and after median latencies from those runs had been printed for a time estimate. It changed only the number of prompts.</li>
 <li><b>Best-fixed comparison is chosen in hindsight</b> from the same data. That favours the fixed arm, and it is descriptive.</li>
 <li><b>Scope.</b> One laptop (10 physical / 16 logical cores, 16 GB), one 1.1B model in fp32 on CPU, synthetic busy-loop load, 10 prompts. rule_lookup's arm map was measured on this machine, which is part of why it does well here; a different machine needs a new sweep.</li>
 </ul>
-<h2>17. Appendix: files, commands and data index</h2>
-<h3>17.1 Repository layout</h3>
+<h2>17. Related work</h2>
+<p>This section covers only the six papers listed in section 18, each opened and checked (<code>experiments/reference_check.md</code>). It is not a survey, and it makes no claim about what other work exists.</p>
+<p><b>Choosing the number of threads at run time.</b> Curtis-Maury et al. [4] predict an energy-efficient level of concurrency for each phase of a multithreaded scientific program. They use multivariate regression on hardware event counters and throttle concurrency at run time. Pusukuri et al. [5] (Thread Reinforcer) find a good thread count by monitoring a program at OS level, without recompiling it or changing OS policies. On a 24-core server they found that the thread count giving the best speedup varied widely across PARSEC programs (16 to 63 threads). Both adapt a program's thread count to that program's own scalability. This project instead adapts the thread budget of one LLM request to load from other processes on a shared 16-thread machine, re-deciding every 10 tokens.</p>
+<p><b>Run-time adaptation of inference.</b> EdgeFM [6] switches at run time between an on-device model and a cloud foundation model, based on data uncertainty and network conditions. Here the model and its output stay fixed (token IDs are identical across arms), and only the CPU thread budget changes.</p>
+<p><b>Learning-based policies.</b> <code>rl_adaptive</code> uses a deep Q-network [2] as a contextual bandit (discount 0, one decision per segment). <code>bandit_adaptive</code> is a discounted contextual bandit over CPU-load bins with a UCB-style exploration bonus, in the family of contextual-bandit methods such as [3], though it keeps per-bin estimates instead of the linear model of [3]. The model under test is TinyLlama-1.1B [1].</p>
+
+<h2>18. References</h2>
+<ol>
+<li>P. Zhang, G. Zeng, T. Wang, W. Lu. TinyLlama: An Open-Source Small Language Model. arXiv:2401.02385, 2024.</li>
+<li>V. Mnih, K. Kavukcuoglu, D. Silver, et al. Human-level control through deep reinforcement learning. <i>Nature</i> 518(7540):529-533, 2015. doi:10.1038/nature14236.</li>
+<li>L. Li, W. Chu, J. Langford, R. E. Schapire. A Contextual-Bandit Approach to Personalized News Article Recommendation. In <i>Proc. 19th International Conference on World Wide Web (WWW 2010)</i>, pp. 661-670, 2010. doi:10.1145/1772690.1772758; arXiv:1003.0146.</li>
+<li>M. Curtis-Maury, F. Blagojevic, C. D. Antonopoulos, D. S. Nikolopoulos. Prediction-Based Power-Performance Adaptation of Multithreaded Scientific Codes. <i>IEEE Transactions on Parallel and Distributed Systems</i> 19(10):1396-1410, 2008. doi:10.1109/TPDS.2007.70804.</li>
+<li>K. K. Pusukuri, R. Gupta, L. N. Bhuyan. Thread Reinforcer: Dynamically Determining Number of Threads via OS Level Monitoring. In <i>2011 IEEE International Symposium on Workload Characterization (IISWC)</i>, pp. 116-125, 2011. doi:10.1109/IISWC.2011.6114208.</li>
+<li>B. Yang, L. He, N. Ling, Z. Yan, G. Xing, X. Shuai, X. Ren, X. Jiang. EdgeFM: Leveraging Foundation Model for Open-set Learning on the Edge. In <i>Proc. ACM SenSys 2023</i>. arXiv:2311.10986.</li>
+</ol>
+<h2>19. Appendix: files, commands and data index</h2>
+<h3>19.1 Repository layout</h3>
 <pre>configs/config.yaml            model + strategy definitions
 src/config.py                  config loader
 src/data/                      Alpaca download, preprocessing, prompt loading
@@ -532,7 +555,7 @@ run_overnight.cmd              historical unattended v5 run command
 tests/                         pipeline, adaptive and model-equivalence tests
 docs/report/                   this HTML report source</pre>
 
-<h3>17.2 Reproducing the results</h3>
+<h3>19.2 Reproducing the results</h3>
 <pre>python -m src.data.download_dataset
 python -m src.data.preprocess_dataset
 python -m pytest tests/test_functional_equivalence.py -v
@@ -557,7 +580,7 @@ python -m pytest tests/test_pipeline.py tests/test_adaptive.py</pre>
 python experiments/check_main_partial.py v7
 python experiments/analyze_v7.py     writes experiments/e4_*.csv, e4_summary.txt, results/v7/*.png</pre>
 
-<h3>17.3 Data index (data/processed)</h3>
+<h3>19.3 Data index (data/processed)</h3>
 <table>
 <tr><th>Files</th><th>Contents</th></tr>
 <tr><td><code>prompts.csv</code>, <code>inference_results.csv</code>, <code>runtime_metrics.csv</code></td><td>v1 prompts, inference and telemetry</td></tr>
