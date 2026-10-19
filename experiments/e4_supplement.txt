@@ -1,0 +1,84 @@
+v7 main run, descriptive supplement (experiments/analyze_main_v7.py); no significance labels
+source: data/processed/v7runs_v7.csv (450 rows), experiments/e4_plan.yaml
+
+a. rule_lookup vs best fixed arm per scenario (best = lowest mean latency among threads_2, balanced, latency_optimized, static, chosen from the same data; diff = rule_lookup - best, negative = rule_lookup faster) -> experiments/e4_best_fixed.csv
+    scenario        best_fixed  n  mean_rule_lookup_s  mean_best_fixed_s  mean_diff_s  mean_diff_percent  contexts_rule_lookup_faster
+ steady_idle latency_optimized 10              16.423             16.442       -0.019             -0.117                            7
+steady_heavy          balanced 10              23.263             23.702       -0.439             -1.851                            8
+       spike          balanced 10              21.253             22.331       -1.078             -4.829                           10
+      relief latency_optimized 10              18.931             19.601       -0.671             -3.421                            9
+        ramp          balanced 10              22.152             22.692       -0.540             -2.382                            8
+
+b. Segment-oracle regret per policy per scenario (s, summed token seconds vs per-segment oracle over the four fixed arms; from experiments/e4_segment_oracle.csv, also section 3 of e4_summary.txt)
+    scenario  num_contexts  mean_segment_oracle_s  mean_best_single_fixed_s  rule_v5  rule_lookup  cores_heuristic  rl_adaptive  bandit_adaptive
+        ramp            10                  19.53                     21.37    19.83         1.41            11.95        14.59             1.22
+      relief            10                  17.69                     18.49     3.10         0.14             1.19         2.00             1.05
+       spike            10                  19.96                     20.92     2.05         0.09             2.31         3.09             1.23
+steady_heavy            10                  22.11                     22.36     1.17        -0.11             2.07         4.66             0.06
+ steady_idle            10                  15.33                     15.43     0.36         0.10             0.34         0.38             0.57
+
+c. By session: fixed arms in steady_idle and steady_heavy, mean decode s/token (prefill excluded) -> experiments/e4_by_date.csv
+                               mean_decode_sec_per_token                n          
+session                                           13 Oct 18-19 Oct 13 Oct 18-19 Oct
+scenario     condition                                                             
+steady_heavy balanced                             0.1081    0.1065    1.0       9.0
+             latency_optimized                    0.1116    0.1118    1.0       9.0
+             static                               0.1302    0.1220    1.0       9.0
+             threads_2                            0.1191    0.1183    1.0       9.0
+steady_idle  balanced                             0.0880    0.0876    2.0       8.0
+             latency_optimized                    0.0786    0.0757    2.0       8.0
+             static                               0.0782    0.0777    2.0       8.0
+             threads_2                            0.0954    0.0945    2.0       8.0
+
+Mean external CPU during runs (%), all rows, by session:
+             n  mean_external_cpu_during
+session                                 
+13 Oct      67                     37.14
+18-19 Oct  383                     40.71
+
+Mean external CPU during runs (%), by scenario and session (count, mean):
+              count             mean          
+session      13 Oct 18-19 Oct 13 Oct 18-19 Oct
+scenario                                      
+ramp             13        77  47.77     48.74
+relief            9        81  28.16     28.41
+spike            18        72  50.24     50.13
+steady_heavy      9        81  67.41     67.11
+steady_idle      18        72   5.71      6.82
+
+13 Oct rows are prompts 21-22 only (contexts 1-8); 18-19 Oct rows are prompts 22-30.
+Session differences therefore mix machine state with prompt differences.
+
+d. Provenance
+commit_hash values over 450 rows: {'0a8e3b2a687dbe05781c2f973614231b946af6f3': 383, 'ecec5690ce39e1d9602b698c0136fede1c32aad1': 67}
+all rows share one commit_hash: NO
+
+commit 0a8e3b2a68: 383 rows, wall clock 2026-10-18T23:56:47 .. 2026-10-19T13:05:01, tree_dirty {True: 383}
+  files changed in that commit (git show --name-status 0a8e3b2a68):
+    M	experiments/agent_progress.md
+    M	experiments/cpu_capacity_check.txt
+    M	experiments/e4_plan.yaml
+    M	experiments/resume_plan_v7.py
+    M	experiments/resume_plan_v7.txt
+    M	experiments/sanity_resume.txt
+    M	run_main_v7.cmd
+  git diff --stat 0a8e3b2a68..cbcc59d6f6 -- run_v7.py src/ configs/ experiments/e4_plan.yaml experiments/e2_frozen.yaml experiments/e3_rule.yaml experiments/e4_bandit_prior.yaml:
+    (empty: unchanged)
+
+commit ecec5690ce: 67 rows, wall clock 2026-10-13T13:04:00 .. 2026-10-13T13:32:08, tree_dirty {False: 67}
+  files changed in that commit (git show --name-status ecec5690ce):
+    M	experiments/agent_progress.md
+    A	experiments/analyze_v7.py
+    A	experiments/build_e4_plan.py
+    A	experiments/e3_dqn_v7.csv
+    A	experiments/e3_dqn_v7.txt
+    A	experiments/e4_bandit_prior.yaml
+    A	experiments/e4_plan.yaml
+    A	experiments/train_dqn_v7.py
+  git diff --stat ecec5690ce..cbcc59d6f6 -- run_v7.py src/ configs/ experiments/e4_plan.yaml experiments/e2_frozen.yaml experiments/e3_rule.yaml experiments/e4_bandit_prior.yaml:
+    experiments/e4_plan.yaml | 15 +++++++++------
+     1 file changed, 9 insertions(+), 6 deletions(-)
+
+git status at run start is not recorded. tree_dirty is `git status --porcelain --untracked-files=no`
+at write time; it also counts the tracked output CSVs the run itself writes.
+data/processed/dqn_model_v7.pth (gitignored): sha256 b8045e99e1b2632a..., modified 2026-10-13 07:03 UTC

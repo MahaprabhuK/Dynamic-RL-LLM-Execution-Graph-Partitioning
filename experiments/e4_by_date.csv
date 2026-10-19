@@ -1,0 +1,17 @@
+scenario,condition,session,n,mean_decode_sec_per_token,mean_external_cpu_during
+steady_heavy,balanced,13 Oct,1,0.10813,66.79
+steady_heavy,balanced,18-19 Oct,9,0.10650277777777778,66.49444444444445
+steady_heavy,latency_optimized,13 Oct,1,0.111591,67.16
+steady_heavy,latency_optimized,18-19 Oct,9,0.11175788888888889,66.51555555555555
+steady_heavy,static,13 Oct,1,0.130217,71.27
+steady_heavy,static,18-19 Oct,9,0.1220188888888889,67.81222222222222
+steady_heavy,threads_2,13 Oct,1,0.119096,68.0
+steady_heavy,threads_2,18-19 Oct,9,0.11826277777777777,67.59333333333333
+steady_idle,balanced,13 Oct,2,0.087951,6.205
+steady_idle,balanced,18-19 Oct,8,0.08756462500000001,7.28375
+steady_idle,latency_optimized,13 Oct,2,0.078621,5.385
+steady_idle,latency_optimized,18-19 Oct,8,0.075736125,7.32875
+steady_idle,static,13 Oct,2,0.078204,6.115
+steady_idle,static,18-19 Oct,8,0.07769325,5.7124999999999995
+steady_idle,threads_2,13 Oct,2,0.095418,8.76
+steady_idle,threads_2,18-19 Oct,8,0.094453125,6.80875
