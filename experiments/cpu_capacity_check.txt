@@ -1,4 +1,4 @@
-CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-17T18:21:55
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T12:57:23
 power source: AC (battery 100 %), battery saver: off
 active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
 AC Maximum processor state: 100 %

@@ -1,0 +1,214 @@
+Partial main-run checks for tag v7 (experiments/check_main_partial.py; HEAD 0a8e3b2a68)
+Rows in v7runs_v7.csv: 450 of 450
+
+[PASS] commit_hash filled (40 chars) on every row: {'0a8e3b2a687dbe05781c2f973614231b946af6f3': 383, 'ecec5690ce39e1d9602b698c0136fede1c32aad1': 67}
+[FAIL] tree_dirty false on every row: {True: 383, False: 67}
+[PASS] git diff 0a8e3b2a68..HEAD on run code/configs is empty: (empty)
+[PASS] no other code changed since 0a8e3b2a68 (only data/, experiments/ outputs, ['tests/test_adaptive.py']): none
+[FAIL] git diff ecec5690ce..HEAD on run code/configs is empty: experiments/e4_plan.yaml | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+[FAIL] no other code changed since ecec5690ce (only data/, experiments/ outputs, ['tests/test_adaptive.py']): ['run_main_v7.cmd']
+[PASS] token IDs identical across conditions within each context: {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 16: 1, 17: 1, 18: 1, 19: 1, 20: 1, 21: 1, 22: 1, 23: 1, 24: 1, 25: 1, 26: 1, 27: 1, 28: 1, 29: 1, 30: 1, 31: 1, 32: 1, 33: 1, 34: 1, 35: 1, 36: 1, 37: 1, 38: 1, 39: 1, 40: 1, 41: 1, 42: 1, 43: 1, 44: 1, 45: 1, 46: 1, 47: 1, 48: 1, 49: 1, 50: 1}
+[PASS] all runs generated max_new_tokens: [200]
+[PASS] fixed conditions: 0 switches: {'balanced': 0, 'latency_optimized': 0, 'static': 0, 'threads_2': 0}
+[PASS] fixed conditions: 0 emergency triggers: {'balanced': 0, 'latency_optimized': 0, 'static': 0, 'threads_2': 0}
+[PASS] fixed conditions: one arm per run in timeline: 
+[PASS] no duplicate (prompt, scenario, condition) rows: 0 duplicates
+
+git diff --stat 0a8e3b2a68 0a8e3b2a68 (whole tree):
+(empty)
+git diff --stat 0a8e3b2a68 0a8e3b2a68 -- tests/:
+(empty: a63992a and its revert cancel out)
+
+git diff --stat ecec5690ce 0a8e3b2a68 (whole tree):
+ data/processed/main_v7.log                         |    16 +
+ .../v7bandit_state_v7/bandit_adaptive.json         |     1 +
+ data/processed/v7decisions_v7.csv                  |  1341 ++
+ data/processed/v7runs_v7.csv                       |    68 +
+ data/processed/v7segments_v7.csv                   |  1341 ++
+ data/processed/v7timelines_v7.csv                  | 13401 +++++++++++++++++++
+ experiments/agent_progress.md                      |    56 +
+ experiments/check_machine.py                       |    64 +
+ experiments/check_main_partial.py                  |   127 +
+ experiments/check_main_partial.txt                 |    62 +
+ experiments/cpu_capacity_check.py                  |   102 +
+ experiments/cpu_capacity_check.txt                 |    14 +
+ experiments/e4_plan.yaml                           |    15 +-
+ experiments/machine_v7.json                        |    10 +
+ experiments/powercfg_after.txt                     |   933 ++
+ experiments/powercfg_before.txt                    |   933 ++
+ experiments/resume_plan_v7.py                      |   118 +
+ experiments/resume_plan_v7.txt                     |   414 +
+ experiments/sanity_resume.py                       |    87 +
+ experiments/sanity_resume.txt                      |    13 +
+ run_main_v7.cmd                                    |    36 +
+ 21 files changed, 19146 insertions(+), 6 deletions(-)
+git diff --stat ecec5690ce 0a8e3b2a68 -- tests/:
+(empty: a63992a and its revert cancel out)
+
+Paging-flagged runs (system pages input >= 1000 in a segment): 106 of 450
+ context_id  prompt_id     scenario         condition  latency_seconds  max_segment_system_pages_input  ram_percent_before  min_available_mb
+          1         21 steady_heavy            static          32.0089                           32851                82.4            2652.8
+          2         21         ramp   bandit_adaptive          21.7410                            2522                82.5            2730.4
+          2         21         ramp            static         163.3028                           32155                82.7            2657.5
+          2         21         ramp         threads_2          24.1818                            8989                80.8            2994.3
+          3         21        spike            static          38.1286                           11793                80.5            3000.6
+          3         21        spike       rule_lookup          21.2488                            1421                80.8            3017.5
+          3         21        spike latency_optimized          22.2976                            9885                81.1            2965.7
+          3         21        spike          balanced          23.7637                          178630                81.4            2696.2
+          4         21       relief       rule_lookup          19.2397                            1300                81.2            2975.2
+          4         21       relief           rule_v5          24.0389                            6100                81.1            2960.8
+          5         21  steady_idle           rule_v5          16.7177                            7749                81.3            3009.5
+          5         21  steady_idle         threads_2          21.3370                           99522                81.3            2712.9
+          5         21  steady_idle latency_optimized          16.7847                            1151                81.7            2936.0
+          6         22  steady_idle   bandit_adaptive          18.8864                            1337                81.9            2917.4
+          7         22        spike           rule_v5          25.7394                          186606                82.0            2632.6
+          7         22        spike         threads_2          24.5333                            2662                81.7            2821.6
+          7         22        spike          balanced          22.5611                            3936                81.4            2919.7
+          8         22         ramp   cores_heuristic         123.8556                           87995                83.0            1726.8
+          8         22         ramp            static          51.7487                           16842                83.3            2348.6
+          8         22         ramp       rl_adaptive          27.1895                            6222                83.8            2472.8
+          8         22         ramp   bandit_adaptive          23.0197                            1462                84.3            2466.9
+          8         22         ramp latency_optimized          22.4088                            4969                84.2            2468.5
+          9         22       relief   bandit_adaptive          20.0650                           11983                84.4            2216.8
+          9         22       relief         threads_2          22.9685                            8032                84.1            2402.5
+          9         22       relief       rl_adaptive          22.2683                            1721                83.6            2550.4
+          9         22       relief       rule_lookup          18.9563                            4505                83.8            2537.1
+          9         22       relief   cores_heuristic          19.9766                           11572                84.0            2401.1
+          9         22       relief          balanced          20.7136                            7500                84.5            2405.1
+         10         22 steady_heavy           rule_v5          23.2122                            1104                80.0            3129.9
+         10         22 steady_heavy latency_optimized          25.5056                            1260                80.6            3049.2
+         11         23  steady_idle          balanced          18.7580                            3065                80.7            3095.7
+         11         23  steady_idle       rl_adaptive          16.5861                            2518                80.5            3122.6
+         11         23  steady_idle           rule_v5          16.5601                            1214                80.6            3118.9
+         11         23  steady_idle   cores_heuristic          16.7611                            1128                80.6            2991.9
+         12         23        spike   bandit_adaptive          21.4994                           32785                81.1            2809.1
+         12         23        spike   cores_heuristic          23.1285                            4884                82.2            2807.7
+         12         23        spike           rule_v5          25.0629                            3653                82.6            2695.1
+         12         23        spike latency_optimized          22.7782                           41124                82.1            2825.0
+         12         23        spike         threads_2          23.8319                            4345                82.2            2824.9
+         12         23        spike          balanced          21.9739                            5413                81.5            2880.1
+         13         23       relief       rule_lookup          18.8360                            5169                81.8            2828.9
+         13         23       relief           rule_v5          19.3283                            2550                82.4            2759.3
+         14         23         ramp         threads_2          24.0644                            4246                82.7            2722.4
+         14         23         ramp            static          26.8417                            2145                81.9            2832.1
+         15         23 steady_heavy            static          36.0580                            1380                82.4            2707.5
+         15         23 steady_heavy   bandit_adaptive          24.8738                            9619                81.8            2818.3
+         15         23 steady_heavy          balanced          24.2116                            3528                82.3            2786.3
+         16         24        spike            static          25.8263                            5031                82.1            2684.4
+         16         24        spike   cores_heuristic          24.3408                           22671                83.2            2592.6
+         16         24        spike         threads_2          24.0969                            1711                83.3            2615.0
+         16         24        spike latency_optimized          25.7611                            8500                83.3            2476.2
+         17         24         ramp            static          93.2125                            6911                83.5            2472.7
+         17         24         ramp         threads_2          24.2907                            2878                84.4            2483.0
+         17         24         ramp           rule_v5          57.6699                           14277                84.2            2392.0
+         17         24         ramp   cores_heuristic          23.3502                           77481                83.6            2296.0
+         17         24         ramp       rule_lookup          22.8708                            1434                84.0            2483.1
+         17         24         ramp          balanced          22.7331                            4767                84.2            2510.1
+         18         24       relief       rule_lookup          19.2194                            2785                83.4            2604.2
+         19         24 steady_heavy         threads_2          26.3408                          155667                83.7            2406.0
+         19         24 steady_heavy          balanced          23.3705                            1286                83.0            2662.2
+         19         24 steady_heavy       rl_adaptive          26.8050                            3067                83.8            2496.7
+         20         24  steady_idle       rl_adaptive          16.9221                           26140                83.6            2368.8
+         20         24  steady_idle   cores_heuristic          16.6809                            2413                83.8            2597.6
+         21         25         ramp           rule_v5          26.6359                            8130                84.8            2413.2
+         21         25         ramp       rl_adaptive          42.1417                            1304                84.3            2461.4
+         23         25        spike       rule_lookup          21.2619                            1661                83.3            2583.5
+         24         25  steady_idle          balanced          19.0489                            6497                83.8            2593.9
+         24         25  steady_idle           rule_v5          16.7673                            1038                83.8            2587.5
+         25         25 steady_heavy           rule_v5          32.9442                            1734                83.9            2358.7
+         26         26 steady_heavy latency_optimized          25.6011                            2672                83.8            2548.0
+         27         26         ramp       rl_adaptive          29.2911                           21214                84.3            2305.7
+         29         26        spike       rule_lookup          21.1541                            1804                83.6            2543.8
+         29         26        spike       rl_adaptive          25.6351                            2007                84.2            2462.4
+         29         26        spike         threads_2          24.0377                            2279                84.3            2469.0
+         30         26       relief         threads_2          22.4591                          172156                84.6            2228.8
+         31         27       relief   cores_heuristic          19.9866                            5419                81.6            2871.2
+         31         27       relief           rule_v5          19.1173                           25207                82.2            2803.9
+         32         27  steady_idle            static          16.7941                            5537                82.0            2844.2
+         32         27  steady_idle   bandit_adaptive          16.6322                            5144                81.8            2747.3
+         32         27  steady_idle       rule_lookup          16.5662                            2263                83.0            2729.2
+         34         27         ramp          balanced          22.3646                            1197                83.5            2573.1
+         36         28 steady_heavy latency_optimized          25.8084                            7606                82.0            2826.1
+         37         28         ramp          balanced          22.5828                            2256                82.0            2837.6
+         37         28         ramp   cores_heuristic          22.8845                            1509                82.1            2826.5
+         38         28       relief latency_optimized          19.9026                           43508                81.8            2863.1
+         41         29  steady_idle         threads_2          20.6780                            5194                82.9            2726.0
+         43         29       relief       rule_lookup          19.3086                            2616                82.7            2616.6
+         44         29 steady_heavy            static          35.5306                            3741                83.1            2612.3
+         45         29         ramp            static         123.5967                           87119                83.7            2489.0
+         45         29         ramp         threads_2          24.1752                            3635                83.6            2649.2
+         46         30 steady_heavy           rule_v5          23.9538                           19003                82.3            2525.1
+         46         30 steady_heavy          balanced          23.5537                           12107                82.4            2695.5
+         46         30 steady_heavy         threads_2          26.1729                            5119                83.2            2483.5
+         46         30 steady_heavy       rule_lookup          24.7880                            5371                84.4            2404.9
+         46         30 steady_heavy       rl_adaptive          32.1746                            3620                84.9            2186.9
+         47         30       relief           rule_v5          35.6192                           35865                84.5            1573.6
+         49         30  steady_idle          balanced          19.2419                            7075                85.0            2411.9
+         49         30  steady_idle       rule_lookup          16.7309                            4910                82.6            2762.8
+         50         30        spike         threads_2          25.3648                           50752                82.4            2603.5
+         50         30        spike          balanced          23.1424                           32759                82.4            2515.8
+         46         30 steady_heavy            static          34.7028                           22191                81.1            2813.9
+         46         30 steady_heavy   cores_heuristic          26.2558                           19342                82.3            2690.0
+         47         30       relief   bandit_adaptive          19.2239                            4486                83.1            2653.7
+         48         30         ramp       rule_lookup          22.0946                            4230                83.1            2637.5
+         48         30         ramp            static         132.1977                          109265                83.1            2627.7
+         48         30         ramp latency_optimized          24.9259                            3674                84.3            2454.3
+Paging-flagged by condition: {'threads_2': 15, 'balanced': 14, 'rule_v5': 14, 'static': 13, 'rule_lookup': 13, 'latency_optimized': 10, 'cores_heuristic': 10, 'rl_adaptive': 9, 'bandit_adaptive': 8}
+RAM before runs: min 79.8 %, median 82.7 %, max 85.0 %
+RAM-guard skips: 17 (skipped_runs_v7.csv exists)
+
+Cells done (rows = (prompt, scenario) context in run order; x = done):
+            prompt      scenario threads_2 balanced latency_optimized static rule_v5 rule_lookup cores_heuristic rl_adaptive bandit_adaptive
+context_id                                                                                                                                  
+1               21  steady_heavy         x        x                 x      x       x           x               x           x               x
+2               21          ramp         x        x                 x      x       x           x               x           x               x
+3               21         spike         x        x                 x      x       x           x               x           x               x
+4               21        relief         x        x                 x      x       x           x               x           x               x
+5               21   steady_idle         x        x                 x      x       x           x               x           x               x
+6               22   steady_idle         x        x                 x      x       x           x               x           x               x
+7               22         spike         x        x                 x      x       x           x               x           x               x
+8               22          ramp         x        x                 x      x       x           x               x           x               x
+9               22        relief         x        x                 x      x       x           x               x           x               x
+10              22  steady_heavy         x        x                 x      x       x           x               x           x               x
+11              23   steady_idle         x        x                 x      x       x           x               x           x               x
+12              23         spike         x        x                 x      x       x           x               x           x               x
+13              23        relief         x        x                 x      x       x           x               x           x               x
+14              23          ramp         x        x                 x      x       x           x               x           x               x
+15              23  steady_heavy         x        x                 x      x       x           x               x           x               x
+16              24         spike         x        x                 x      x       x           x               x           x               x
+17              24          ramp         x        x                 x      x       x           x               x           x               x
+18              24        relief         x        x                 x      x       x           x               x           x               x
+19              24  steady_heavy         x        x                 x      x       x           x               x           x               x
+20              24   steady_idle         x        x                 x      x       x           x               x           x               x
+21              25          ramp         x        x                 x      x       x           x               x           x               x
+22              25        relief         x        x                 x      x       x           x               x           x               x
+23              25         spike         x        x                 x      x       x           x               x           x               x
+24              25   steady_idle         x        x                 x      x       x           x               x           x               x
+25              25  steady_heavy         x        x                 x      x       x           x               x           x               x
+26              26  steady_heavy         x        x                 x      x       x           x               x           x               x
+27              26          ramp         x        x                 x      x       x           x               x           x               x
+28              26   steady_idle         x        x                 x      x       x           x               x           x               x
+29              26         spike         x        x                 x      x       x           x               x           x               x
+30              26        relief         x        x                 x      x       x           x               x           x               x
+31              27        relief         x        x                 x      x       x           x               x           x               x
+32              27   steady_idle         x        x                 x      x       x           x               x           x               x
+33              27  steady_heavy         x        x                 x      x       x           x               x           x               x
+34              27          ramp         x        x                 x      x       x           x               x           x               x
+35              27         spike         x        x                 x      x       x           x               x           x               x
+36              28  steady_heavy         x        x                 x      x       x           x               x           x               x
+37              28          ramp         x        x                 x      x       x           x               x           x               x
+38              28        relief         x        x                 x      x       x           x               x           x               x
+39              28   steady_idle         x        x                 x      x       x           x               x           x               x
+40              28         spike         x        x                 x      x       x           x               x           x               x
+41              29   steady_idle         x        x                 x      x       x           x               x           x               x
+42              29         spike         x        x                 x      x       x           x               x           x               x
+43              29        relief         x        x                 x      x       x           x               x           x               x
+44              29  steady_heavy         x        x                 x      x       x           x               x           x               x
+45              29          ramp         x        x                 x      x       x           x               x           x               x
+46              30  steady_heavy         x        x                 x      x       x           x               x           x               x
+47              30        relief         x        x                 x      x       x           x               x           x               x
+48              30          ramp         x        x                 x      x       x           x               x           x               x
+49              30   steady_idle         x        x                 x      x       x           x               x           x               x
+50              30         spike         x        x                 x      x       x           x               x           x               x
+Complete contexts: 50 of 50

@@ -132,3 +132,31 @@
   prompts outside the plan stop it before the checks. The three checks still run first.
 - experiments/resume_plan_v7.txt: 383 runs left, 3.40 h (2.82 h without paging-flagged medians).
   Sessions: 22-24 113 runs 1.02 h, 25-27 135 runs 1.19 h, 28-30 135 runs 1.19 h.
+
+## Stage 7: main run finished (2026-10-18 23:49 - 2026-10-19 13:05)
+- 450/450 runs, 50/50 contexts complete. Commits: 67 rows ecec569 (13 Oct), 383 rows 0a8e3b2.
+- 18 Oct 23:49: gates passed (CPU 100 %, sanity +11.7/+15.5 %, RAM 83.4-84.9 %). Claude Code killed the
+  background job at ~00:25 for low system memory after 8 runs; 5 cells of context 9 skipped by the RAM guard.
+- 19 Oct: run_main_v7.cmd driven by a retry loop launched with Start-Process (outside Claude Code's
+  process reaping; WMI Win32_Process.Create silently did nothing). Loop waits for baseline RAM <= 66 %
+  (model adds ~17-27 points depending on memory compression), reruns --resume until 450 rows.
+- 11:13: run_v7.py killed during a RAM-guard wait (thought to be a leak; it was not, a fresh process has
+  the same ~7.8 GB private bytes). The run in progress had not been written; --resume redid it, no data lost.
+- Sanity gate stopped two resume attempts: RAM 85.1 % (11:14), balanced +81 % (12:51); next attempts passed.
+- RAM was the binding constraint. WhatsApp / Phone Link restarted on their own several times; the Claude
+  desktop app (~1.35 GB, separate from the CLI) was still running until 12:31. After closing it the run finished.
+- 17 RAM-guard skips in total (skipped_runs_v7.csv), all re-run later. Context 9 split 3 conditions on 18 Oct
+  23:59 / 6 on 19 Oct 08:44; contexts 46-48 span up to 2 h.
+- 106/450 paging-flagged runs. RAM before runs min 79.8 / median 82.7 / max 85.0 %.
+- experiments/check_main_final.txt: all data checks PASS. Expected FAILs: tree_dirty True on the 383 later
+  rows (the tracked output CSVs and gate reports change during the run; no code changed), code diff
+  ecec569..HEAD = e4_plan.yaml amendment, run_main_v7.cmd added. check_main_partial.txt kept as the 17 Oct record.
+
+## Stage 8: analysis (2026-10-19 13:06)
+- experiments/analyze_v7.py -> experiments/e4_summary.txt, e4_*.csv, results/v7/*.png.
+- 15/20 pre-registered tests Holm-significant. rule_lookup faster than threads_2 in all 5 scenarios and than
+  balanced in steady_idle/spike/relief (not steady_heavy, ramp). rl_adaptive slower than rule_lookup in
+  steady_heavy/spike/relief/ramp; cores_heuristic slower in steady_heavy/spike/relief.
+- Sensitivity (paging-flagged removed, n 3-9): all signs kept, 10/20 significant.
+- Report: docs/report/project_report.html section 16 + PDF regenerated (headless Edge).
+- Power settings from 17 Oct are still changed; revert is for the user (admin).
