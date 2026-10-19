@@ -1,0 +1,480 @@
+==== 19-10-2026  8:42:29.12 run_main_v7.cmd start (prompts: ) 
+[OK] cpu_model: expected '13th Gen Intel(R) Core(TM) i5-13450HX', found '13th Gen Intel(R) Core(TM) i5-13450HX'
+[OK] physical_cores: expected 10, found 10
+[OK] logical_cores: expected 16, found 16
+[OK] total_ram_gb: expected 15.69, found 15.69
+[OK] windows_build: expected '10.0.26300', found '10.0.26300'
+[OK] python: expected '3.13.6', found '3.13.6'
+[OK] torch: expected '2.13.0+cpu', found '2.13.0+cpu'
+[OK] transformers: expected '5.14.1', found '5.14.1'
+Machine matches machine_v7.json
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T08:42:52
+power source: AC (battery 100 %), battery saver: off
+active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+AC Maximum processor state: 100 %
+AC Minimum processor state: 5 %
+AC Processor performance core parking min cores: 100 %
+AC Processor performance core parking min cores, efficiency class 1: 100 %
+AC Heterogeneous thread scheduling policy (5 = automatic): 5
+cpu_freq before: current 2400 MHz, min 0, max 2400 (psutil on Windows often reports the base clock only)
+logical CPUs: 16, physical: 10
+cpu_freq during (16 workers, every 2 s): 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400 MHz (max 2400)
+total CPU over 20 s with 16 workers: 100.0 %
+per-core CPU %: cpu0 100, cpu1 100, cpu2 100, cpu3 100, cpu4 100, cpu5 100, cpu6 100, cpu7 100, cpu8 100, cpu9 100, cpu10 100, cpu11 100, cpu12 100, cpu13 100, cpu14 100, cpu15 100
+[PASS] total CPU >= 90 %
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   6%|▋         | 13/201 [00:00<00:01, 125.92it/s]Loading weights:  15%|█▌        | 31/201 [00:00<00:01, 145.93it/s]Loading weights:  24%|██▍       | 49/201 [00:00<00:01, 149.92it/s]Loading weights:  33%|███▎      | 67/201 [00:00<00:00, 149.00it/s]Loading weights:  42%|████▏     | 85/201 [00:00<00:00, 158.34it/s]Loading weights:  50%|█████     | 101/201 [00:00<00:00, 150.08it/s]Loading weights:  58%|█████▊    | 117/201 [00:00<00:00, 142.87it/s]Loading weights:  69%|██████▉   | 139/201 [00:00<00:00, 149.99it/s]Loading weights:  77%|███████▋  | 154/201 [00:01<00:00, 141.56it/s]Loading weights:  84%|████████▍ | 169/201 [00:01<00:00, 116.58it/s]Loading weights:  91%|█████████ | 182/201 [00:01<00:00, 111.38it/s]Loading weights:  97%|█████████▋| 194/201 [00:01<00:00, 54.46it/s] Loading weights: 100%|██████████| 201/201 [00:01<00:00, 103.61it/s]
+Model loaded successfully!
+{'order': 0, 'arm': 'threads_2', 'decode_sec_per_token': 0.116304, 'latency_seconds': 4.376, 'external_cpu_during': 67.37, 'ram_percent_before': 82.8, 'available_mb_before': 2771.5, 'wall_clock_start': '2026-10-19T08:43:49'}
+{'order': 1, 'arm': 'balanced', 'decode_sec_per_token': 0.105568, 'latency_seconds': 3.8, 'external_cpu_during': 65.43, 'ram_percent_before': 82.8, 'available_mb_before': 2765.4, 'wall_clock_start': '2026-10-19T08:43:54'}
+{'order': 2, 'arm': 'balanced', 'decode_sec_per_token': 0.10691, 'latency_seconds': 3.963, 'external_cpu_during': 64.46, 'ram_percent_before': 82.8, 'available_mb_before': 2765.5, 'wall_clock_start': '2026-10-19T08:43:59'}
+{'order': 3, 'arm': 'threads_2', 'decode_sec_per_token': 0.117453, 'latency_seconds': 4.374, 'external_cpu_during': 65.17, 'ram_percent_before': 82.8, 'available_mb_before': 2768.4, 'wall_clock_start': '2026-10-19T08:44:04'}
+Pre-resume sanity check (experiments/sanity_resume.py), commit 0a8e3b2a68
+prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
+
+ order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
+     0 threads_2              0.116304            4.376                67.37                82.8               2771.5 2026-10-19T08:43:49
+     1  balanced              0.105568            3.800                65.43                82.8               2765.4 2026-10-19T08:43:54
+     2  balanced              0.106910            3.963                64.46                82.8               2765.5 2026-10-19T08:43:59
+     3 threads_2              0.117453            4.374                65.17                82.8               2768.4 2026-10-19T08:44:04
+
+[PASS] threads_2: 0.1169 s/tok vs sweep 0.118 (-1.0%, limit +/-25%)
+[PASS] balanced: 0.1062 s/tok vs sweep 0.107 (-0.7%, limit +/-25%)
+[PASS] RAM before each run < 85 %: [82.8, 82.8, 82.8, 82.8]
+OVERALL: PASS
+free RAM before main run: 7248 MB (45.1 % free, 54.9 % used)
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  38%|███▊      | 77/201 [00:00<00:00, 767.14it/s]Loading weights:  77%|███████▋  | 154/201 [00:00<00:00, 705.87it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 591.82it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=v7 plan=e4_plan.yaml commit=0a8e3b2a68 (dirty)
+50 contexts x 9 conditions = 450 runs; 75 already done; 200 tokens
+================================================================================
+[ctx 009/50] prompt 22 relief      :DQN model loaded from: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\dqn_model_v7.pth (action_size=6)
+ rl_adaptive=22.3 rule_lookup=19.0 cores_heuristic=20.0  RAM 85.1% > 85.0%: waiting 30 s (retry 1/10)
+ latency_optimized=18.8 static=24.7 balanced=20.7 | 369 runs left, ETA 2.9 h
+[ctx 010/50] prompt 22 steady_heavy: threads_2=25.9 bandit_adaptive=23.9 cores_heuristic=25.6 rule_v5=23.2 static=26.2 balanced=23.2 rule_lookup=23.2 latency_optimized=25.5 rl_adaptive=23.0 | 360 runs left, ETA 2.7 h
+[ctx 011/50] prompt 23 steady_idle : latency_optimized=16.2 balanced=18.8 static=16.6 rl_adaptive=16.6 rule_v5=16.6 bandit_adaptive=16.0 cores_heuristic=16.8 rule_lookup=16.1 threads_2=20.3 | 351 runs left, ETA 2.3 h
+[ctx 012/50] prompt 23 spike       : bandit_adaptive=21.5 cores_heuristic=23.1 rule_lookup=21.1 rule_v5=25.1 rl_adaptive=23.1 static=24.5 latency_optimized=22.8 threads_2=23.8 balanced=22.0 | 342 runs left, ETA 2.3 h
+[ctx 013/50] prompt 23 relief      : bandit_adaptive=20.6 threads_2=22.2 balanced=20.5 rule_lookup=18.8 rl_adaptive=20.8 static=20.3 rule_v5=19.3 latency_optimized=19.2 cores_heuristic=19.9 | 333 runs left, ETA 2.2 h
+[ctx 014/50] prompt 23 ramp        : rl_adaptive=39.1 threads_2=24.1 rule_lookup=21.7 cores_heuristic=22.6 rule_v5=28.9 latency_optimized=22.1 static=26.8 bandit_adaptive=23.1 balanced=22.4 | 324 runs left, ETA 2.2 h
+[ctx 015/50] prompt 23 steady_heavy: static=36.1 rl_adaptive=27.0 threads_2=25.7 latency_optimized=25.7 bandit_adaptive=24.9 rule_lookup=22.6 rule_v5=24.0 cores_heuristic=25.4 balanced=24.2 | 315 runs left, ETA 2.2 h
+[ctx 016/50] prompt 24 spike       : rule_lookup=20.8 rl_adaptive=22.3 balanced=22.0 static=25.8 cores_heuristic=24.3 threads_2=24.1 bandit_adaptive=22.1 rule_v5=21.9 latency_optimized=25.8 | 306 runs left, ETA 2.1 h
+[ctx 017/50] prompt 24 ramp        : static=93.2 threads_2=24.3 rule_v5=57.7 bandit_adaptive=21.7 rl_adaptive=38.6 cores_heuristic=23.4 latency_optimized=24.5 rule_lookup=22.9 balanced=22.7 | 297 runs left, ETA 2.2 h
+[ctx 018/50] prompt 24 relief      : bandit_adaptive=19.9 static=20.5 threads_2=22.5 latency_optimized=20.0 rule_lookup=19.2 rule_v5=19.8 balanced=20.6 rl_adaptive=20.9 cores_heuristic=20.0 | 288 runs left, ETA 2.1 h
+[ctx 019/50] prompt 24 steady_heavy: threads_2=26.3 bandit_adaptive=22.7 rule_lookup=23.1 balanced=23.4 latency_optimized=25.4 cores_heuristic=25.6 rule_v5=24.2 rl_adaptive=26.8 static=27.1 | 279 runs left, ETA 2.0 h
+[ctx 020/50] prompt 24 steady_idle : latency_optimized=16.4 threads_2=20.5 balanced=19.0 rule_lookup=16.1 rl_adaptive=16.9 rule_v5=16.7 bandit_adaptive=16.6 cores_heuristic=16.7 static=16.6 | 270 runs left, ETA 1.9 h
+[ctx 021/50] prompt 25 ramp        : rule_lookup=23.2 latency_optimized=25.3 balanced=22.6 static=25.2 rule_v5=26.6 bandit_adaptive=20.9 rl_adaptive=42.1 threads_2=23.7 cores_heuristic=22.8 | 261 runs left, ETA 1.9 h
+[ctx 022/50] prompt 25 relief      : latency_optimized=20.1 cores_heuristic=19.8 threads_2=22.4 balanced=20.7 static=20.4 rule_lookup=18.8 rl_adaptive=19.7 bandit_adaptive=19.0 rule_v5=20.2 | 252 runs left, ETA 1.8 h
+[ctx 023/50] prompt 25 spike       : balanced=21.9 rule_lookup=21.3 cores_heuristic=23.6 latency_optimized=22.7 rl_adaptive=28.7 bandit_adaptive=21.4 static=29.7 rule_v5=21.7 threads_2=24.1 | 243 runs left, ETA 1.7 h
+[ctx 024/50] prompt 25 steady_idle : static=16.8 cores_heuristic=16.5 rule_lookup=16.2 rl_adaptive=16.7 threads_2=20.4 balanced=19.0 latency_optimized=16.0 bandit_adaptive=16.4 rule_v5=16.8 | 234 runs left, ETA 1.6 h
+[ctx 025/50] prompt 25 steady_heavy: latency_optimized=25.1 cores_heuristic=25.6 rule_v5=32.9 balanced=23.9 bandit_adaptive=23.4 rl_adaptive=27.0 static=26.6 threads_2=25.5 rule_lookup=22.6 | 225 runs left, ETA 1.6 h
+[ctx 026/50] prompt 26 steady_heavy: balanced=23.7 rl_adaptive=31.2 rule_lookup=22.8 rule_v5=23.6 threads_2=25.9 static=34.6 latency_optimized=25.6 bandit_adaptive=23.8 cores_heuristic=25.4 | 216 runs left, ETA 1.5 h
+[ctx 027/50] prompt 26 ramp        : latency_optimized=25.6 bandit_adaptive=22.1 rule_v5=64.2 static=28.9 balanced=23.7 threads_2=24.2 rule_lookup=22.3 rl_adaptive=29.3 cores_heuristic=22.6 | 207 runs left, ETA 1.5 h
+[ctx 028/50] prompt 26 steady_idle : rl_adaptive=16.7 rule_lookup=16.2 balanced=18.9 cores_heuristic=16.5 threads_2=20.5 rule_v5=16.7 static=16.6 latency_optimized=16.3 bandit_adaptive=16.1 | 198 runs left, ETA 1.4 h
+[ctx 029/50] prompt 26 spike       : rule_lookup=21.2 bandit_adaptive=22.5 balanced=21.9 static=25.6 rl_adaptive=25.6 latency_optimized=22.3 rule_v5=23.1 threads_2=24.0 cores_heuristic=23.3 | 189 runs left, ETA 1.3 h
+[ctx 030/50] prompt 26 relief      : rl_adaptive=21.3 threads_2=22.5  RAM 86.1% > 85.0%: waiting 30 s (retry 1/10)
+ cores_heuristic=19.9 balanced=20.8 rule_v5=20.6 static=20.6 rule_lookup=18.7 latency_optimized=19.2 bandit_adaptive=21.8 | 180 runs left, ETA 1.3 h
+[ctx 031/50] prompt 27 relief      : cores_heuristic=20.0 rl_adaptive=21.1 static=20.3 bandit_adaptive=18.8 rule_v5=19.1 threads_2=22.4 balanced=20.4 latency_optimized=19.2 rule_lookup=18.7 | 171 runs left, ETA 1.2 h
+[ctx 032/50] prompt 27 steady_idle : balanced=18.8 static=16.8 bandit_adaptive=16.6 rule_lookup=16.6 rule_v5=16.6 cores_heuristic=16.6 threads_2=20.4 latency_optimized=15.9 rl_adaptive=16.6 | 162 runs left, ETA 1.1 h
+[ctx 033/50] prompt 27 steady_heavy: bandit_adaptive=22.7 static=28.6 rule_lookup=23.6 rl_adaptive=31.0 cores_heuristic=25.4 balanced=23.3 latency_optimized=25.2 rule_v5=23.5 threads_2=25.6 | 153 runs left, ETA 1.1 h
+[ctx 034/50] prompt 27 ramp        : balanced=22.4 threads_2=24.5 latency_optimized=22.6 rl_adaptive=28.2 rule_lookup=21.6 rule_v5=51.7 bandit_adaptive=21.2 static=119.0 cores_heuristic=22.5 | 144 runs left, ETA 1.0 h
+[ctx 035/50] prompt 27 spike       : threads_2=23.9 static=45.9 cores_heuristic=24.2 balanced=21.9 rule_lookup=21.5 rl_adaptive=23.3 bandit_adaptive=21.7 rule_v5=22.0 latency_optimized=22.8 | 135 runs left, ETA 1.0 h
+[ctx 036/50] prompt 28 steady_heavy: rule_lookup=22.9 bandit_adaptive=23.1 cores_heuristic=25.7 static=28.0 balanced=23.6 rl_adaptive=23.9 rule_v5=23.6 latency_optimized=25.8 threads_2=25.6 | 126 runs left, ETA 0.9 h
+[ctx 037/50] prompt 28 ramp        : balanced=22.6 bandit_adaptive=22.8 rl_adaptive=48.3 cores_heuristic=22.9 rule_lookup=21.9 rule_v5=47.7 threads_2=24.0 static=142.1 latency_optimized=24.7 | 117 runs left, ETA 0.9 h
+[ctx 038/50] prompt 28 relief      : rule_lookup=18.8 bandit_adaptive=19.3 latency_optimized=19.9 static=21.1 cores_heuristic=20.6 threads_2=23.3 rule_v5=20.1 rl_adaptive=20.6 balanced=21.0 | 108 runs left, ETA 0.8 h
+[ctx 039/50] prompt 28 steady_idle : balanced=19.0 threads_2=20.4 rule_lookup=16.4 rule_v5=16.7 cores_heuristic=16.6 rl_adaptive=16.7 static=16.6 bandit_adaptive=16.7 latency_optimized=16.7 | 99 runs left, ETA 0.7 h
+[ctx 040/50] prompt 28 spike       : cores_heuristic=23.2 rl_adaptive=22.6 bandit_adaptive=26.2 rule_lookup=21.5 balanced=21.9 threads_2=24.1 rule_v5=23.2 static=26.5 latency_optimized=22.4 | 90 runs left, ETA 0.6 h
+[ctx 041/50] prompt 29 steady_idle : latency_optimized=16.7 threads_2=20.7 bandit_adaptive=16.2 static=16.6 rule_v5=16.7 balanced=18.9 rule_lookup=16.7 cores_heuristic=16.7 rl_adaptive=16.8 | 81 runs left, ETA 0.6 h
+[ctx 042/50] prompt 29 spike       : rule_lookup=21.0 balanced=22.3 rule_v5=22.1 cores_heuristic=23.3 static=31.4 bandit_adaptive=22.3 threads_2=24.0 latency_optimized=22.5 rl_adaptive=26.2 | 72 runs left, ETA 0.5 h
+[ctx 043/50] prompt 29 relief      : rl_adaptive=20.4 bandit_adaptive=19.7 threads_2=22.4 static=22.6 latency_optimized=20.3 rule_lookup=19.3 cores_heuristic=19.8 rule_v5=19.3 balanced=20.8 | 63 runs left, ETA 0.4 h
+[ctx 044/50] prompt 29 steady_heavy: latency_optimized=25.4 static=35.5 rule_v5=23.1 rule_lookup=22.8 bandit_adaptive=22.5 cores_heuristic=25.6 balanced=23.5 threads_2=25.5 rl_adaptive=34.7 | 54 runs left, ETA 0.4 h
+[ctx 045/50] prompt 29 ramp        : balanced=22.5 rl_adaptive=26.2 cores_heuristic=22.8 static=123.6 threads_2=24.2 latency_optimized=25.8 rule_v5=54.2 rule_lookup=22.0 bandit_adaptive=22.0 | 45 runs left, ETA 0.3 h
+[ctx 046/50] prompt 30 steady_heavy: latency_optimized=25.5 rule_v5=24.0 bandit_adaptive=23.2 balanced=23.6 threads_2=26.2 rule_lookup=24.8 rl_adaptive=32.2  RAM 86.3% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.1% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 6/10)
+MAIN RUN FINISHED (run_v7.py exit code -1) 
+rows in v7runs_v7.csv: 412
+==== 19-10-2026 11:13:20.31 run_main_v7.cmd start (prompts: ) 
+[OK] cpu_model: expected '13th Gen Intel(R) Core(TM) i5-13450HX', found '13th Gen Intel(R) Core(TM) i5-13450HX'
+[OK] physical_cores: expected 10, found 10
+[OK] logical_cores: expected 16, found 16
+[OK] total_ram_gb: expected 15.69, found 15.69
+[OK] windows_build: expected '10.0.26300', found '10.0.26300'
+[OK] python: expected '3.13.6', found '3.13.6'
+[OK] torch: expected '2.13.0+cpu', found '2.13.0+cpu'
+[OK] transformers: expected '5.14.1', found '5.14.1'
+Machine matches machine_v7.json
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T11:13:28
+power source: AC (battery 100 %), battery saver: off
+active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+AC Maximum processor state: 100 %
+AC Minimum processor state: 5 %
+AC Processor performance core parking min cores: 100 %
+AC Processor performance core parking min cores, efficiency class 1: 100 %
+AC Heterogeneous thread scheduling policy (5 = automatic): 5
+cpu_freq before: current 2400 MHz, min 0, max 2400 (psutil on Windows often reports the base clock only)
+logical CPUs: 16, physical: 10
+cpu_freq during (16 workers, every 2 s): 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400 MHz (max 2400)
+total CPU over 20 s with 16 workers: 100.0 %
+per-core CPU %: cpu0 100, cpu1 100, cpu2 100, cpu3 100, cpu4 100, cpu5 100, cpu6 100, cpu7 100, cpu8 100, cpu9 100, cpu10 100, cpu11 100, cpu12 100, cpu13 100, cpu14 100, cpu15 100
+[PASS] total CPU >= 90 %
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   0%|          | 1/201 [00:00<00:21,  9.46it/s]Loading weights:  33%|███▎      | 67/201 [00:00<00:00, 380.36it/s]Loading weights:  56%|█████▌    | 112/201 [00:00<00:00, 392.23it/s]Loading weights:  76%|███████▌  | 152/201 [00:00<00:00, 263.62it/s]Loading weights:  91%|█████████ | 183/201 [00:00<00:00, 208.00it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 205.49it/s]
+Model loaded successfully!
+{'order': 0, 'arm': 'threads_2', 'decode_sec_per_token': 0.118569, 'latency_seconds': 4.612, 'external_cpu_during': 67.39, 'ram_percent_before': 85.1, 'available_mb_before': 2398.2, 'wall_clock_start': '2026-10-19T11:14:05'}
+{'order': 1, 'arm': 'balanced', 'decode_sec_per_token': 0.106945, 'latency_seconds': 4.065, 'external_cpu_during': 65.14, 'ram_percent_before': 85.1, 'available_mb_before': 2387.9, 'wall_clock_start': '2026-10-19T11:14:11'}
+{'order': 2, 'arm': 'balanced', 'decode_sec_per_token': 0.107479, 'latency_seconds': 3.92, 'external_cpu_during': 64.83, 'ram_percent_before': 85.1, 'available_mb_before': 2390.2, 'wall_clock_start': '2026-10-19T11:14:16'}
+{'order': 3, 'arm': 'threads_2', 'decode_sec_per_token': 0.118707, 'latency_seconds': 4.398, 'external_cpu_during': 64.75, 'ram_percent_before': 85.1, 'available_mb_before': 2389.4, 'wall_clock_start': '2026-10-19T11:14:21'}
+Pre-resume sanity check (experiments/sanity_resume.py), commit 0a8e3b2a68
+prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
+
+ order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
+     0 threads_2              0.118569            4.612                67.39                85.1               2398.2 2026-10-19T11:14:05
+     1  balanced              0.106945            4.065                65.14                85.1               2387.9 2026-10-19T11:14:11
+     2  balanced              0.107479            3.920                64.83                85.1               2390.2 2026-10-19T11:14:16
+     3 threads_2              0.118707            4.398                64.75                85.1               2389.4 2026-10-19T11:14:21
+
+[PASS] threads_2: 0.1186 s/tok vs sweep 0.118 (+0.5%, limit +/-25%)
+[PASS] balanced: 0.1072 s/tok vs sweep 0.107 (+0.2%, limit +/-25%)
+[FAIL] RAM before each run < 85 %: [85.1, 85.1, 85.1, 85.1]
+OVERALL: FAIL
+ABORT: sanity_resume.py failed  
+==== 19-10-2026 11:19:28.27 run_main_v7.cmd start (prompts: ) 
+[OK] cpu_model: expected '13th Gen Intel(R) Core(TM) i5-13450HX', found '13th Gen Intel(R) Core(TM) i5-13450HX'
+[OK] physical_cores: expected 10, found 10
+[OK] logical_cores: expected 16, found 16
+[OK] total_ram_gb: expected 15.69, found 15.69
+[OK] windows_build: expected '10.0.26300', found '10.0.26300'
+[OK] python: expected '3.13.6', found '3.13.6'
+[OK] torch: expected '2.13.0+cpu', found '2.13.0+cpu'
+[OK] transformers: expected '5.14.1', found '5.14.1'
+Machine matches machine_v7.json
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T11:19:35
+power source: AC (battery 100 %), battery saver: off
+active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+AC Maximum processor state: 100 %
+AC Minimum processor state: 5 %
+AC Processor performance core parking min cores: 100 %
+AC Processor performance core parking min cores, efficiency class 1: 100 %
+AC Heterogeneous thread scheduling policy (5 = automatic): 5
+cpu_freq before: current 2400 MHz, min 0, max 2400 (psutil on Windows often reports the base clock only)
+logical CPUs: 16, physical: 10
+cpu_freq during (16 workers, every 2 s): 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400 MHz (max 2400)
+total CPU over 20 s with 16 workers: 100.0 %
+per-core CPU %: cpu0 100, cpu1 100, cpu2 100, cpu3 100, cpu4 100, cpu5 100, cpu6 100, cpu7 100, cpu8 100, cpu9 100, cpu10 100, cpu11 100, cpu12 100, cpu13 100, cpu14 100, cpu15 100
+[PASS] total CPU >= 90 %
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  34%|███▍      | 69/201 [00:00<00:00, 688.96it/s]Loading weights:  69%|██████▉   | 139/201 [00:00<00:00, 686.24it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 687.47it/s]
+Model loaded successfully!
+{'order': 0, 'arm': 'threads_2', 'decode_sec_per_token': 0.117831, 'latency_seconds': 4.442, 'external_cpu_during': 67.87, 'ram_percent_before': 84.0, 'available_mb_before': 2571.8, 'wall_clock_start': '2026-10-19T11:20:12'}
+{'order': 1, 'arm': 'balanced', 'decode_sec_per_token': 0.107455, 'latency_seconds': 3.916, 'external_cpu_during': 66.32, 'ram_percent_before': 84.0, 'available_mb_before': 2568.5, 'wall_clock_start': '2026-10-19T11:20:18'}
+{'order': 2, 'arm': 'balanced', 'decode_sec_per_token': 0.107004, 'latency_seconds': 3.9, 'external_cpu_during': 64.88, 'ram_percent_before': 84.0, 'available_mb_before': 2570.9, 'wall_clock_start': '2026-10-19T11:20:22'}
+{'order': 3, 'arm': 'threads_2', 'decode_sec_per_token': 0.119062, 'latency_seconds': 4.443, 'external_cpu_during': 66.57, 'ram_percent_before': 84.0, 'available_mb_before': 2572.1, 'wall_clock_start': '2026-10-19T11:20:27'}
+Pre-resume sanity check (experiments/sanity_resume.py), commit 0a8e3b2a68
+prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
+
+ order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
+     0 threads_2              0.117831            4.442                67.87                84.0               2571.8 2026-10-19T11:20:12
+     1  balanced              0.107455            3.916                66.32                84.0               2568.5 2026-10-19T11:20:18
+     2  balanced              0.107004            3.900                64.88                84.0               2570.9 2026-10-19T11:20:22
+     3 threads_2              0.119062            4.443                66.57                84.0               2572.1 2026-10-19T11:20:27
+
+[PASS] threads_2: 0.1184 s/tok vs sweep 0.118 (+0.4%, limit +/-25%)
+[PASS] balanced: 0.1072 s/tok vs sweep 0.107 (+0.2%, limit +/-25%)
+[PASS] RAM before each run < 85 %: [84.0, 84.0, 84.0, 84.0]
+OVERALL: PASS
+free RAM before main run: 7138 MB (44.4 % free, 55.6 % used)
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  14%|█▍        | 28/201 [00:00<00:00, 235.41it/s]Loading weights:  31%|███▏      | 63/201 [00:00<00:00, 276.25it/s]Loading weights:  45%|████▌     | 91/201 [00:00<00:00, 235.42it/s]Loading weights:  60%|██████    | 121/201 [00:00<00:00, 248.15it/s]Loading weights:  79%|███████▉  | 159/201 [00:00<00:00, 287.13it/s]Loading weights:  94%|█████████▍| 189/201 [00:00<00:00, 254.57it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 259.93it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=v7 plan=e4_plan.yaml commit=0a8e3b2a68 (dirty)
+50 contexts x 9 conditions = 450 runs; 412 already done; 200 tokens
+================================================================================
+[ctx 046/50] prompt 30 steady_heavy:  RAM 85.2% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.1% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 85.1% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 85.3% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 85.3% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 85.3% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 85.3% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 87.8% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 87.5% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.9% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.9% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.2% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+ | 38 runs left, ETA 6.3 h
+[ctx 047/50] prompt 30 relief      :  RAM 86.2% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 9/10)
+DQN model loaded from: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\dqn_model_v7.pth (action_size=6)
+ rl_adaptive=21.7  RAM 85.2% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 85.2% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 85.1% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 85.1% > 85.0%: waiting 30 s (retry 5/10)
+ balanced=20.6 rule_lookup=18.8  RAM 85.2% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.1% > 85.0%: waiting 30 s (retry 2/10)
+ threads_2=22.4  RAM 85.1% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.5% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.5% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 87.3% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.5% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.5% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.1% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.1% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 87.2% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 87.1% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 87.1% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 87.1% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 87.1% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 87.1% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 87.2% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 87.2% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 87.3% > 85.0%: waiting 30 s (retry 6/10)
+ rule_v5=35.6  RAM 87.6% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 87.9% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 88.2% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 90.2% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 88.9% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 89.1% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 89.1% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 88.7% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 88.5% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 87.0% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.9% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+ | 33 runs left, ETA 4.8 h
+[ctx 048/50] prompt 30 ramp        :  RAM 86.9% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.9% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 85.7% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 85.8% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 85.5% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 85.5% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.5% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 85.5% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 87.8% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.2% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.2% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.7% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.7% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.7% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.6% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.3% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.3% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.2% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.9% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.9% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 87.8% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 88.1% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 87.0% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 86.9% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 86.9% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 86.8% > 85.0%: waiting 30 s (retry 9/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 10/10)
+  SKIPPED: RAM 86.5% above 85.0% after 10 retries -> C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\skipped_runs_v7.csv
+  RAM 86.5% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 86.5% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.4% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 85.5% > 85.0%: waiting 30 s (retry 8/10)
+ bandit_adaptive=21.1 rl_adaptive=46.9 balanced=22.9 | 30 runs left, ETA 4.9 h
+[ctx 049/50] prompt 30 steady_idle : balanced=19.2 static=16.7 threads_2=20.6 rule_v5=16.7 cores_heuristic=16.7 bandit_adaptive=16.7  RAM 85.4% > 85.0%: waiting 30 s (retry 1/10)
+  RAM 85.5% > 85.0%: waiting 30 s (retry 2/10)
+  RAM 85.4% > 85.0%: waiting 30 s (retry 3/10)
+  RAM 86.1% > 85.0%: waiting 30 s (retry 4/10)
+  RAM 85.9% > 85.0%: waiting 30 s (retry 5/10)
+  RAM 86.0% > 85.0%: waiting 30 s (retry 6/10)
+  RAM 85.9% > 85.0%: waiting 30 s (retry 7/10)
+  RAM 86.3% > 85.0%: waiting 30 s (retry 8/10)
+  RAM 87.2% > 85.0%: waiting 30 s (retry 9/10)
+ rl_adaptive=16.7 latency_optimized=16.6 rule_lookup=16.7 | 21 runs left, ETA 1.8 h
+[ctx 050/50] prompt 30 spike       : bandit_adaptive=22.7 cores_heuristic=23.4 latency_optimized=23.6 static=30.0 rl_adaptive=23.2 rule_v5=24.1 threads_2=25.4 rule_lookup=21.8 balanced=23.1 | 12 runs left, ETA 0.7 h
+Finished: 438 runs in v7runs_v7.csv at 12:50:47
+MAIN RUN FINISHED (run_v7.py exit code 0) 
+rows in v7runs_v7.csv: 438
+==== 19-10-2026 12:50:53.04 run_main_v7.cmd start (prompts: ) 
+[OK] cpu_model: expected '13th Gen Intel(R) Core(TM) i5-13450HX', found '13th Gen Intel(R) Core(TM) i5-13450HX'
+[OK] physical_cores: expected 10, found 10
+[OK] logical_cores: expected 16, found 16
+[OK] total_ram_gb: expected 15.69, found 15.69
+[OK] windows_build: expected '10.0.26300', found '10.0.26300'
+[OK] python: expected '3.13.6', found '3.13.6'
+[OK] torch: expected '2.13.0+cpu', found '2.13.0+cpu'
+[OK] transformers: expected '5.14.1', found '5.14.1'
+Machine matches machine_v7.json
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T12:51:03
+power source: AC (battery 100 %), battery saver: off
+active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+AC Maximum processor state: 100 %
+AC Minimum processor state: 5 %
+AC Processor performance core parking min cores: 100 %
+AC Processor performance core parking min cores, efficiency class 1: 100 %
+AC Heterogeneous thread scheduling policy (5 = automatic): 5
+cpu_freq before: current 2400 MHz, min 0, max 2400 (psutil on Windows often reports the base clock only)
+logical CPUs: 16, physical: 10
+cpu_freq during (16 workers, every 2 s): 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400 MHz (max 2400)
+total CPU over 20 s with 16 workers: 100.0 %
+per-core CPU %: cpu0 100, cpu1 100, cpu2 100, cpu3 100, cpu4 100, cpu5 100, cpu6 100, cpu7 100, cpu8 100, cpu9 100, cpu10 100, cpu11 100, cpu12 100, cpu13 100, cpu14 100, cpu15 100
+[PASS] total CPU >= 90 %
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   0%|          | 1/201 [00:00<00:21,  9.35it/s]Loading weights:  29%|██▉       | 58/201 [00:00<00:00, 302.76it/s]Loading weights:  47%|████▋     | 94/201 [00:00<00:00, 325.62it/s]Loading weights:  65%|██████▍   | 130/201 [00:00<00:00, 263.30it/s]Loading weights:  79%|███████▊  | 158/201 [00:00<00:00, 213.47it/s]Loading weights:  91%|█████████ | 182/201 [00:00<00:00, 207.99it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 218.13it/s]
+Model loaded successfully!
+{'order': 0, 'arm': 'threads_2', 'decode_sec_per_token': 0.133346, 'latency_seconds': 5.084, 'external_cpu_during': 80.94, 'ram_percent_before': 80.6, 'available_mb_before': 3112.0, 'wall_clock_start': '2026-10-19T12:51:40'}
+{'order': 1, 'arm': 'balanced', 'decode_sec_per_token': 0.279139, 'latency_seconds': 19.36, 'external_cpu_during': 86.23, 'ram_percent_before': 81.7, 'available_mb_before': 2937.8, 'wall_clock_start': '2026-10-19T12:51:46'}
+{'order': 2, 'arm': 'balanced', 'decode_sec_per_token': 0.10818, 'latency_seconds': 4.113, 'external_cpu_during': 72.46, 'ram_percent_before': 82.4, 'available_mb_before': 2827.8, 'wall_clock_start': '2026-10-19T12:52:07'}
+{'order': 3, 'arm': 'threads_2', 'decode_sec_per_token': 0.115854, 'latency_seconds': 4.4, 'external_cpu_during': 66.25, 'ram_percent_before': 82.3, 'available_mb_before': 2844.4, 'wall_clock_start': '2026-10-19T12:52:12'}
+Pre-resume sanity check (experiments/sanity_resume.py), commit 0a8e3b2a68
+prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
+
+ order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
+     0 threads_2              0.133346            5.084                80.94                80.6               3112.0 2026-10-19T12:51:40
+     1  balanced              0.279139           19.360                86.23                81.7               2937.8 2026-10-19T12:51:46
+     2  balanced              0.108180            4.113                72.46                82.4               2827.8 2026-10-19T12:52:07
+     3 threads_2              0.115854            4.400                66.25                82.3               2844.4 2026-10-19T12:52:12
+
+[PASS] threads_2: 0.1246 s/tok vs sweep 0.118 (+5.6%, limit +/-25%)
+[FAIL] balanced: 0.1937 s/tok vs sweep 0.107 (+81.0%, limit +/-25%)
+[PASS] RAM before each run < 85 %: [80.6, 81.7, 82.4, 82.3]
+OVERALL: FAIL
+ABORT: sanity_resume.py failed  
+==== 19-10-2026 12:57:19.26 run_main_v7.cmd start (prompts: ) 
+[OK] cpu_model: expected '13th Gen Intel(R) Core(TM) i5-13450HX', found '13th Gen Intel(R) Core(TM) i5-13450HX'
+[OK] physical_cores: expected 10, found 10
+[OK] logical_cores: expected 16, found 16
+[OK] total_ram_gb: expected 15.69, found 15.69
+[OK] windows_build: expected '10.0.26300', found '10.0.26300'
+[OK] python: expected '3.13.6', found '3.13.6'
+[OK] torch: expected '2.13.0+cpu', found '2.13.0+cpu'
+[OK] transformers: expected '5.14.1', found '5.14.1'
+Machine matches machine_v7.json
+CPU capacity check (experiments/cpu_capacity_check.py), 2026-10-19T12:57:23
+power source: AC (battery 100 %), battery saver: off
+active scheme: Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+AC Maximum processor state: 100 %
+AC Minimum processor state: 5 %
+AC Processor performance core parking min cores: 100 %
+AC Processor performance core parking min cores, efficiency class 1: 100 %
+AC Heterogeneous thread scheduling policy (5 = automatic): 5
+cpu_freq before: current 2400 MHz, min 0, max 2400 (psutil on Windows often reports the base clock only)
+logical CPUs: 16, physical: 10
+cpu_freq during (16 workers, every 2 s): 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400 MHz (max 2400)
+total CPU over 20 s with 16 workers: 100.0 %
+per-core CPU %: cpu0 100, cpu1 100, cpu2 100, cpu3 100, cpu4 100, cpu5 100, cpu6 100, cpu7 100, cpu8 100, cpu9 100, cpu10 100, cpu11 100, cpu12 100, cpu13 100, cpu14 100, cpu15 100
+[PASS] total CPU >= 90 %
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  34%|███▍      | 69/201 [00:00<00:00, 660.41it/s]Loading weights:  72%|███████▏  | 144/201 [00:00<00:00, 670.49it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 382.72it/s]
+Model loaded successfully!
+{'order': 0, 'arm': 'threads_2', 'decode_sec_per_token': 0.11946, 'latency_seconds': 4.642, 'external_cpu_during': 69.33, 'ram_percent_before': 80.5, 'available_mb_before': 3134.9, 'wall_clock_start': '2026-10-19T12:57:59'}
+{'order': 1, 'arm': 'balanced', 'decode_sec_per_token': 0.108235, 'latency_seconds': 3.955, 'external_cpu_during': 66.55, 'ram_percent_before': 80.6, 'available_mb_before': 3117.0, 'wall_clock_start': '2026-10-19T12:58:04'}
+{'order': 2, 'arm': 'balanced', 'decode_sec_per_token': 0.107793, 'latency_seconds': 3.92, 'external_cpu_during': 65.18, 'ram_percent_before': 80.6, 'available_mb_before': 3113.0, 'wall_clock_start': '2026-10-19T12:58:09'}
+{'order': 3, 'arm': 'threads_2', 'decode_sec_per_token': 0.12132, 'latency_seconds': 4.508, 'external_cpu_during': 65.69, 'ram_percent_before': 80.6, 'available_mb_before': 3113.6, 'wall_clock_start': '2026-10-19T12:58:14'}
+Pre-resume sanity check (experiments/sanity_resume.py), commit 0a8e3b2a68
+prompt 1, 30 decode tokens, 10 busy workers; metric median decode s/token (prefill excluded), as in run_load_sweep_v7.py
+
+ order       arm  decode_sec_per_token  latency_seconds  external_cpu_during  ram_percent_before  available_mb_before    wall_clock_start
+     0 threads_2              0.119460            4.642                69.33                80.5               3134.9 2026-10-19T12:57:59
+     1  balanced              0.108235            3.955                66.55                80.6               3117.0 2026-10-19T12:58:04
+     2  balanced              0.107793            3.920                65.18                80.6               3113.0 2026-10-19T12:58:09
+     3 threads_2              0.121320            4.508                65.69                80.6               3113.6 2026-10-19T12:58:14
+
+[PASS] threads_2: 0.1204 s/tok vs sweep 0.118 (+2.0%, limit +/-25%)
+[PASS] balanced: 0.1080 s/tok vs sweep 0.107 (+0.9%, limit +/-25%)
+[PASS] RAM before each run < 85 %: [80.5, 80.6, 80.6, 80.6]
+OVERALL: PASS
+free RAM before main run: 7781 MB (48.4 % free, 51.6 % used)
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  36%|███▋      | 73/201 [00:00<00:00, 728.10it/s]Loading weights:  73%|███████▎  | 146/201 [00:00<00:00, 678.45it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 680.99it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=v7 plan=e4_plan.yaml commit=0a8e3b2a68 (dirty)
+50 contexts x 9 conditions = 450 runs; 438 already done; 200 tokens
+================================================================================
+[ctx 046/50] prompt 30 steady_heavy: static=34.7 cores_heuristic=26.3 | 10 runs left, ETA 0.1 h
+[ctx 047/50] prompt 30 relief      : bandit_adaptive=19.2 latency_optimized=19.7 static=20.7 cores_heuristic=20.2 | 6 runs left, ETA 0.0 h
+[ctx 048/50] prompt 30 ramp        : rule_v5=23.9 rule_lookup=22.1 threads_2=24.0 cores_heuristic=22.5 static=132.2 latency_optimized=24.9 | 0 runs left, ETA 0.0 h
+Finished: 450 runs in v7runs_v7.csv at 13:05:26
+MAIN RUN FINISHED (run_v7.py exit code 0) 
+rows in v7runs_v7.csv: 450

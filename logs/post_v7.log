@@ -1,0 +1,5 @@
+﻿2026-10-19T12:30:04 waiting for loop pid 30732
+2026-10-19T13:06:05 loop gone, rows 450
+2026-10-19T13:06:07 check_main_partial.py exit 1 (output logs\check_main_final.log, experiments\check_main_partial.txt)
+2026-10-19T13:06:15 analyze_v7.py exit 0 (output logs\analyze_v7.log, experiments\e4_summary.txt)
+2026-10-19T13:06:15 done

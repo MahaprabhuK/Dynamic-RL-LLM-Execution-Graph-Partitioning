@@ -1,0 +1,18 @@
+﻿2026-10-19T08:22:03 loop start, pid 20704, rows 75, target 450, baseline limit 58 %
+2026-10-19T08:22:04 attempt 1 waiting: RAM 70.3 % > 58 % (close browsers/apps)
+2026-10-19T08:32:08 attempt 1 waiting: RAM 69.4 % > 58 % (close browsers/apps)
+2026-10-19T08:42:13 attempt 1 waiting: RAM 62.5 % > 58 % (close browsers/apps)
+2026-10-19T08:42:26 loop stopped by Claude: threshold 58 % was wrong (model adds ~17 points, not 26); restarting with 66 %
+2026-10-19T08:42:27 loop start, pid 30732, rows 75, target 450, baseline limit 66 %
+2026-10-19T08:42:28 attempt 1 start: rows 75, RAM 63.1 %
+2026-10-19T11:13:16 Claude killed run_v7.py pid 11588 during a RAM-guard wait (private bytes 7853 MB, growing over the session); loop resumes with a fresh process
+2026-10-19T11:13:19 attempt 1 end: exit -1, rows 412 (+337)
+2026-10-19T11:13:19 attempt 2 start: rows 412, RAM 58.2 %
+2026-10-19T11:14:27 attempt 2 end: exit 1, rows 412 (+0)
+2026-10-19T11:19:27 attempt 3 start: rows 412, RAM 56 %
+2026-10-19T12:50:51 attempt 3 end: exit 0, rows 438 (+26)
+2026-10-19T12:50:52 attempt 4 start: rows 438, RAM 53.8 %
+2026-10-19T12:52:17 attempt 4 end: exit 1, rows 438 (+0)
+2026-10-19T12:57:18 attempt 5 start: rows 438, RAM 53.2 %
+2026-10-19T13:05:30 attempt 5 end: exit 0, rows 450 (+12)
+2026-10-19T13:05:30 loop end: rows 450
