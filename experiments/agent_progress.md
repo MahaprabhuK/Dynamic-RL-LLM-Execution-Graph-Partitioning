@@ -160,3 +160,9 @@
 - Sensitivity (paging-flagged removed, n 3-9): all signs kept, 10/20 significant.
 - Report: docs/report/project_report.html section 16 + PDF regenerated (headless Edge).
 - Power settings from 17 Oct are still changed; revert is for the user (admin).
+
+## Final report (2026-10-19)
+- docs/report/final_report.html + Final_Report.pdf: section 16 rewritten (headline vs best fixed arm per
+  scenario, bandit descriptive, DQN generalisation wording, Wilcoxon column, provenance, threats to validity
+  incl. 17 Oct power fix). experiments/analyze_main_v7.py supplement (e4_supplement.txt, e4_best_fixed.csv,
+  e4_by_date.csv). project_report.html kept, marked superseded.
