@@ -8,6 +8,8 @@ Everything is measured on one laptop (10 cores / 16 threads, 16 GB) under synthe
 
 **Final report: [docs/report/final_report.html](docs/report/final_report.html)** (PDF: `docs/report/Final_Report.pdf`).
 
+**Dashboard / presentation: [docs/dashboard/index.html](docs/dashboard/index.html)**: one offline HTML file; press P to present (arrows, number keys, N for speaker notes, F for fullscreen). Rebuild with `python experiments/build_dashboard.py`; `python experiments/check_dashboard_numbers.py --selftest` checks every number on it against the CSVs.
+
 ## Main result (v7, pre-registered, 450 runs of 200 tokens)
 
 - Against the best fixed arm in each scenario (chosen afterwards from the same data), `rule_lookup` was 0.1% to 4.8% faster, and faster in 10 of 10 contexts when load arrived mid-request (spike).

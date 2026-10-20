@@ -1,0 +1,17 @@
+Dashboard number check: docs/dashboard/index.html (4.90 MB)
+allowed ['threads_10', 'threads_2', 'threads_3', 'threads_4', 'threads_6']: arm identifier
+allowed ['data/processed/load_sweep_v7.csv', 'data/processed/v7timelines_v7.csv', 'experiments/build_dashboard.py', 'experiments/e3_dqn_v7.csv', 'experiments/e4_best_fixed.csv', 'experiments/e4_plan.yaml', 'experiments/e4_segment_oracle.csv', 'experiments/e4_tests.csv']: file or version identifier
+allowed ['RTX 3050']: GPU model name (next steps)
+allowed ['17 Oct']: date of the power-setting change (evidence: docs/report/final_report.html)
+allowed ['95% CI']: confidence level of the pre-registered CI (evidence: experiments/e4_plan.yaml)
+facts: 57 checked, 75 spans in text (57 keys used; unused: none)
+data values: 2171 top-level entries/arrays elements compared across 42 keys
+self-test (planted errors must be caught): PASS
+  caught: wrong fact value (1 error(s); first: fact bf.max_pct: page '9.9' vs source '4.82914')
+  caught: span differs from fact (1 error(s); first: span tests.n_sig: shows '16', fact is '15')
+  caught: timeline value off by 0.01 s (1 error(s); first: timeline.ramp.cum.rule_lookup[100]: page 8.9368 vs source 8.92676 (tolerance 5e-05))
+  caught: CI bound off by 0.001 s (1 error(s); first: tests[3].hi: page 2.0438 vs source 2.04277 (tolerance 5e-05))
+  caught: stray number in text (1 error(s); first: unmatched number '12' in: ...Summary of 12 runs...)
+  caught: stray number in a chart title (1 error(s); first: unmatched number '12' in: ...onds rule_lookup saves per request (n = 12)...)
+errors: 0
+RESULT: PASS
