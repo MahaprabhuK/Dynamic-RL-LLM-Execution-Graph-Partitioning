@@ -1,0 +1,293 @@
+v7 main run analysis (experiments/analyze_v7.py), sources: data/processed/v7runs_v7.csv, data/processed/v7timelines_v7.csv, experiments/e4_plan.yaml
+runs: 450 of 450; contexts with all conditions: 50
+commit hashes: ['0a8e3b2a687dbe05781c2f973614231b946af6f3', 'ecec5690ce39e1d9602b698c0136fede1c32aad1']
+token IDs identical across conditions in 100.0% of contexts
+
+1. Latency per scenario and condition (s, 200 tokens) -> experiments/e4_latency.csv
+Mean latency table:
+condition     balanced  bandit_adaptive  cores_heuristic  latency_optimized  rl_adaptive  rule_lookup  rule_v5  static  threads_2
+scenario                                                                                                                         
+ramp             22.69            21.96            32.85              24.08        35.43        22.15    40.63   90.60      24.13
+relief           20.77            19.87            20.03              19.60        20.81        18.93    21.97   21.15      22.53
+spike            22.33            22.43            23.57              22.97        24.26        21.25    23.28   30.33      24.23
+steady_heavy     23.70            23.49            25.57              25.47        28.12        23.26    24.62   30.94      25.82
+steady_idle      18.96            16.91            16.67              16.44        16.72        16.42    16.69   16.69      20.55
+
+    scenario         condition  n   mean  median     sd    min     max  switches_per_request  emergency_triggers_per_request
+        ramp          balanced 10 22.692  22.585  0.372 22.365  23.665                   0.0                             0.0
+        ramp   bandit_adaptive 10 21.965  21.877  0.802 20.886  23.084                   4.1                             0.0
+        ramp   cores_heuristic 10 32.851  22.749 31.977 22.469 123.856                   2.2                             0.0
+        ramp latency_optimized 10 24.081  24.594  1.424 22.100  25.830                   0.0                             0.0
+        ramp       rl_adaptive 10 35.428  33.940  8.543 26.204  48.289                   3.0                             0.0
+        ramp       rule_lookup 10 22.152  22.014  0.517 21.613  23.223                   1.6                             0.0
+        ramp           rule_v5 10 40.628  38.309 15.879 23.942  64.231                   1.0                             0.0
+        ramp            static 10 90.600 106.097 52.955 25.157 163.303                   0.0                             0.0
+        ramp         threads_2 10 24.128  24.126  0.203 23.734  24.495                   0.0                             0.0
+      relief          balanced 10 20.771  20.704  0.369 20.394  21.695                   0.0                             0.0
+      relief   bandit_adaptive 10 19.870  19.832  0.893 18.770  21.759                   3.1                             0.0
+      relief   cores_heuristic 10 20.030  19.982  0.231 19.795  20.557                   2.9                             0.0
+      relief latency_optimized 10 19.601  19.654  0.465 18.844  20.255                   0.0                             0.0
+      relief       rl_adaptive 10 20.814  20.836  0.856 19.440  22.268                   4.7                             0.0
+      relief       rule_lookup 10 18.931  18.836  0.239 18.668  19.309                   2.3                             0.0
+      relief           rule_v5 10 21.970  20.148  5.013 19.117  35.619                   1.5                             0.0
+      relief            static 10 21.152  20.513  1.428 20.275  24.676                   0.0                             0.0
+      relief         threads_2 10 22.529  22.412  0.326 22.170  23.259                   0.0                             0.0
+       spike          balanced 10 22.331  21.975  0.644 21.894  23.764                   0.0                             0.0
+       spike   bandit_adaptive 10 22.432  22.193  1.409 21.360  26.213                   4.9                             0.0
+       spike   cores_heuristic 10 23.570  23.395  0.419 23.128  24.341                   1.6                             0.0
+       spike latency_optimized 10 22.973  22.678  1.046 22.298  25.761                   0.0                             0.0
+       spike       rl_adaptive 10 24.259  23.309  1.999 22.310  28.673                   7.1                             0.0
+       spike       rule_lookup 10 21.253  21.201  0.297 20.800  21.842                   2.2                             0.0
+       spike           rule_v5 10 23.278  23.158  1.405 21.670  25.739                   1.0                             0.0
+       spike            static 10 30.331  28.112  6.821 24.529  45.929                   0.0                             0.0
+       spike         threads_2 10 24.230  24.062  0.450 23.832  25.365                   0.0                             0.0
+steady_heavy          balanced 10 23.702  23.560  0.442 23.198  24.635                   0.0                             0.0
+steady_heavy   bandit_adaptive 10 23.489  23.323  0.829 22.460  24.874                   4.7                             0.0
+steady_heavy   cores_heuristic 10 25.572  25.587  0.296 25.154  26.256                   0.0                             0.0
+steady_heavy latency_optimized 10 25.466  25.485  0.215 25.070  25.808                   0.0                             0.0
+steady_heavy       rl_adaptive 10 28.117  27.005  3.919 23.000  34.667                  10.3                             0.0
+steady_heavy       rule_lookup 10 23.263  23.001  0.736 22.557  24.788                   2.6                             0.0
+steady_heavy           rule_v5 10 24.620  23.788  2.947 23.130  32.944                   0.0                             0.0
+steady_heavy            static 10 30.942  30.326  4.020 26.192  36.058                   0.0                             0.0
+steady_heavy         threads_2 10 25.822  25.804  0.280 25.508  26.341                   0.0                             0.0
+ steady_idle          balanced 10 18.957  18.981  0.139 18.758  19.242                   0.0                             0.0
+ steady_idle   bandit_adaptive 10 16.912  16.638  1.060 15.993  18.886                   0.3                             0.0
+ steady_idle   cores_heuristic 10 16.668  16.690  0.080 16.537  16.761                   3.2                             0.0
+ steady_idle latency_optimized 10 16.442  16.491  0.344 15.905  16.913                   0.0                             0.0
+ steady_idle       rl_adaptive 10 16.716  16.694  0.096 16.586  16.922                   0.8                             0.0
+ steady_idle       rule_lookup 10 16.423  16.491  0.264 16.058  16.731                   0.0                             0.0
+ steady_idle           rule_v5 10 16.685  16.684  0.066 16.560  16.767                   0.0                             0.0
+ steady_idle            static 10 16.692  16.665  0.093 16.565  16.840                   0.0                             0.0
+ steady_idle         threads_2 10 20.548  20.470  0.296 20.305  21.337                   0.0                             0.0
+
+2. Pre-registered tests (a - b, seconds; negative = a faster), paired t, Holm over 20 -> experiments/e4_tests.csv
+              a           b     scenario  n  mean_diff_s  ci95_low_s  ci95_high_s  mean_diff_percent  p_t_raw  p_t_holm  p_wilcoxon  significant_holm_0.05
+    rule_lookup    balanced  steady_idle 10      -2.5336     -2.6860      -2.3854           -13.3650   0.0000    0.0000      0.0020                   True
+    rule_lookup    balanced steady_heavy 10      -0.4388     -0.9081       0.0677            -1.8513   0.1268    0.2537      0.1055                  False
+    rule_lookup    balanced        spike 10      -1.0784     -1.4720      -0.7446            -4.8291   0.0004    0.0038      0.0020                   True
+    rule_lookup    balanced       relief 10      -1.8401     -2.0428      -1.6507            -8.8588   0.0000    0.0000      0.0020                   True
+    rule_lookup    balanced         ramp 10      -0.5405     -0.8455      -0.2024            -2.3818   0.0131    0.0530      0.0195                  False
+    rule_lookup   threads_2  steady_idle 10      -4.1247     -4.2987      -3.9670           -20.0736   0.0000    0.0000      0.0020                   True
+    rule_lookup   threads_2 steady_heavy 10      -2.5586     -2.9032      -2.1612            -9.9087   0.0000    0.0000      0.0020                   True
+    rule_lookup   threads_2        spike 10      -2.9774     -3.1922      -2.7672           -12.2880   0.0000    0.0000      0.0020                   True
+    rule_lookup   threads_2       relief 10      -3.5978     -3.8628      -3.3629           -15.9700   0.0000    0.0000      0.0020                   True
+    rule_lookup   threads_2         ramp 10      -1.9764     -2.3107      -1.5748            -8.1913   0.0000    0.0000      0.0020                   True
+    rl_adaptive rule_lookup  steady_idle 10       0.2924      0.1314       0.4737             1.7806   0.0106    0.0530      0.0098                  False
+    rl_adaptive rule_lookup steady_heavy 10       4.8540      2.6271       7.1986            20.8659   0.0034    0.0206      0.0039                   True
+    rl_adaptive rule_lookup        spike 10       3.0058      1.9055       4.2976            14.1431   0.0013    0.0088      0.0020                   True
+    rl_adaptive rule_lookup       relief 10       1.8835      1.3237       2.4424             9.9492   0.0002    0.0016      0.0020                   True
+    rl_adaptive rule_lookup         ramp 10      13.2760      8.3850      18.3270            59.9320   0.0007    0.0059      0.0020                   True
+cores_heuristic rule_lookup  steady_idle 10       0.2451      0.1104       0.3950             1.4921   0.0114    0.0530      0.0039                  False
+cores_heuristic rule_lookup steady_heavy 10       2.3094      1.8715       2.6812             9.9276   0.0000    0.0000      0.0020                   True
+cores_heuristic rule_lookup        spike 10       2.3172      2.0140       2.6602            10.9029   0.0000    0.0000      0.0020                   True
+cores_heuristic rule_lookup       relief 10       1.0994      0.9053       1.2986             5.8075   0.0000    0.0000      0.0020                   True
+cores_heuristic rule_lookup         ramp 10      10.6994      0.3707      31.0471            48.3002   0.3181    0.3181      0.0098                  False
+
+3. Segment-oracle regret vs oracle (summed token seconds; 4 fixed arms) -> experiments/e4_segment_oracle.csv
+    scenario  num_contexts  mean_segment_oracle_s  mean_best_single_fixed_s  rule_v5_regret_vs_oracle_s  rule_lookup_regret_vs_oracle_s  cores_heuristic_regret_vs_oracle_s  rl_adaptive_regret_vs_oracle_s  bandit_adaptive_regret_vs_oracle_s
+        ramp            10                  19.53                     21.37                       19.83                            1.41                               11.95                           14.59                                1.22
+      relief            10                  17.69                     18.49                        3.10                            0.14                                1.19                            2.00                                1.05
+       spike            10                  19.96                     20.92                        2.05                            0.09                                2.31                            3.09                                1.23
+steady_heavy            10                  22.11                     22.36                        1.17                           -0.11                                2.07                            4.66                                0.06
+ steady_idle            10                  15.33                     15.43                        0.36                            0.10                                0.34                            0.38                                0.57
+
+4. SENSITIVITY (paging-flagged runs removed: 106 runs) -> experiments/e4_*_sensitivity.csv
+    scenario         condition  n   mean  median     sd    min     max  switches_per_request  emergency_triggers_per_request
+        ramp          balanced  7 22.749  22.588  0.429 22.446  23.665                 0.000                             0.0
+        ramp   bandit_adaptive  8 21.861  21.838  0.805 20.886  23.084                 3.375                             0.0
+        ramp   cores_heuristic  7 22.632  22.608  0.130 22.469  22.784                 1.429                             0.0
+        ramp latency_optimized  8 24.185  24.594  1.447 22.100  25.830                 0.000                             0.0
+        ramp       rl_adaptive  7 36.522  38.588  9.110 26.204  48.289                 3.143                             0.0
+        ramp       rule_lookup  8 22.069  21.955  0.511 21.613  23.223                 1.750                             0.0
+        ramp           rule_v5  8 40.247  38.309 15.955 23.942  64.231                 1.000                             0.0
+        ramp            static  4 78.776  73.924 60.533 25.157 142.101                 0.000                             0.0
+        ramp         threads_2  6 24.095  24.057  0.257 23.734  24.495                 0.000                             0.0
+      relief          balanced  9 20.777  20.694  0.391 20.394  21.695                 0.000                             0.0
+      relief   bandit_adaptive  8 19.926  19.832  0.978 18.770  21.759                 2.875                             0.0
+      relief   cores_heuristic  8 20.042  19.956  0.260 19.795  20.557                 2.500                             0.0
+      relief latency_optimized  9 19.568  19.568  0.480 18.844  20.255                 0.000                             0.0
+      relief       rl_adaptive  9 20.653  20.779  0.729 19.440  21.694                 4.667                             0.0
+      relief       rule_lookup  5 18.750  18.761  0.070 18.668  18.836                 2.400                             0.0
+      relief           rule_v5  6 20.267  20.148  0.781 19.260  21.568                 1.667                             0.0
+      relief            static 10 21.152  20.513  1.428 20.275  24.676                 0.000                             0.0
+      relief         threads_2  8 22.482  22.396  0.326 22.170  23.259                 0.000                             0.0
+       spike          balanced  6 21.979  21.922  0.141 21.894  22.260                 0.000                             0.0
+       spike   bandit_adaptive  9 22.536  22.333  1.454 21.360  26.213                 5.000                             0.0
+       spike   cores_heuristic  8 23.529  23.395  0.333 23.206  24.182                 1.750                             0.0
+       spike latency_optimized  7 22.699  22.659  0.420 22.330  23.565                 0.000                             0.0
+       spike       rl_adaptive  9 24.106  23.288  2.058 22.310  28.673                 6.444                             0.0
+       spike       rule_lookup  7 21.266  21.132  0.361 20.800  21.842                 2.143                             0.0
+       spike           rule_v5  8 22.747  22.566  0.947 21.670  24.091                 1.000                             0.0
+       spike            static  8 29.920  28.112  6.931 24.529  45.929                 0.000                             0.0
+       spike         threads_2  5 24.088  24.058  0.177 23.942  24.390                 0.000                             0.0
+steady_heavy          balanced  7 23.697  23.567  0.477 23.198  24.635                 0.000                             0.0
+steady_heavy   bandit_adaptive  9 23.335  23.199  0.712 22.460  24.712                 4.889                             0.0
+steady_heavy   cores_heuristic  9 25.497  25.587  0.183 25.154  25.750                 0.000                             0.0
+steady_heavy latency_optimized  7 25.393  25.448  0.201 25.070  25.654                 0.000                             0.0
+steady_heavy       rl_adaptive  8 27.774  27.005  4.125 23.000  34.667                10.625                             0.0
+steady_heavy       rule_lookup  9 23.094  22.875  0.535 22.557  24.226                 2.667                             0.0
+steady_heavy           rule_v5  7 23.727  23.623  0.379 23.130  24.192                 0.000                             0.0
+steady_heavy            static  6 28.521  27.568  3.091 26.192  34.554                 0.000                             0.0
+steady_heavy         threads_2  8 25.713  25.681  0.177 25.508  25.943                 0.000                             0.0
+ steady_idle          balanced  7 18.931  18.976  0.083 18.784  19.008                 0.000                             0.0
+ steady_idle   bandit_adaptive  8 16.700  16.525  0.908 15.993  18.846                 0.250                             0.0
+ steady_idle   cores_heuristic  8 16.655  16.667  0.082 16.537  16.758                 2.875                             0.0
+ steady_idle latency_optimized  9 16.404  16.373  0.341 15.905  16.913                 0.000                             0.0
+ steady_idle       rl_adaptive  8 16.706  16.694  0.057 16.635  16.823                 0.250                             0.0
+ steady_idle       rule_lookup  8 16.367  16.318  0.264 16.058  16.691                 0.000                             0.0
+ steady_idle           rule_v5  7 16.687  16.675  0.052 16.608  16.755                 0.000                             0.0
+ steady_idle            static  9 16.680  16.648  0.091 16.565  16.840                 0.000                             0.0
+ steady_idle         threads_2  8 20.433  20.427  0.080 20.305  20.556                 0.000                             0.0
+
+              a           b     scenario  n  mean_diff_s  ci95_low_s  ci95_high_s  mean_diff_percent  p_t_raw  p_t_holm  p_wilcoxon  significant_holm_0.05
+    rule_lookup    balanced  steady_idle  6      -2.5220     -2.7393      -2.3306           -13.3047   0.0000    0.0001      0.0312                   True
+    rule_lookup    balanced steady_heavy  7      -0.5320     -0.8882      -0.1642            -2.2450   0.0402    0.2012      0.0469                  False
+    rule_lookup    balanced        spike  4      -0.8127     -1.2211      -0.4044            -3.6922   0.0417    0.2012      0.1250                  False
+    rule_lookup    balanced       relief  5      -1.9481     -2.1078      -1.7916            -9.4120   0.0000    0.0005      0.0625                   True
+    rule_lookup    balanced         ramp  6      -0.5576     -1.0021      -0.0324            -2.4536   0.0935    0.2012      0.1562                  False
+    rule_lookup   threads_2  steady_idle  6      -4.1569     -4.3185      -3.9949           -20.3546   0.0000    0.0000      0.0312                   True
+    rule_lookup   threads_2 steady_heavy  8      -2.6234     -2.9268      -2.2682           -10.2026   0.0000    0.0000      0.0078                   True
+    rule_lookup   threads_2        spike  3      -2.6618     -2.9873      -2.4029           -11.0937   0.0041    0.0466      0.2500                   True
+    rule_lookup   threads_2       relief  4      -3.8443     -4.2545      -3.5872           -17.0034   0.0004    0.0054      0.1250                   True
+    rule_lookup   threads_2         ramp  5      -1.8887     -2.5300      -1.1212            -7.8346   0.0079    0.0710      0.0625                  False
+    rl_adaptive rule_lookup  steady_idle  6       0.2579      0.1091       0.4115             1.5667   0.0307    0.1841      0.0625                  False
+    rl_adaptive rule_lookup steady_heavy  8       4.6845      1.9186       7.5284            20.2883   0.0177    0.1413      0.0156                  False
+    rl_adaptive rule_lookup        spike  7       2.1525      1.4376       3.2219            10.1215   0.0062    0.0619      0.0156                  False
+    rl_adaptive rule_lookup       relief  5       2.1254      1.4528       2.6838            11.3358   0.0036    0.0466      0.0625                   True
+    rl_adaptive rule_lookup         ramp  5      12.2406      5.6389      20.1462            56.1456   0.0438    0.2012      0.0625                  False
+cores_heuristic rule_lookup  steady_idle  6       0.1925      0.0934       0.2955             1.1696   0.0219    0.1530      0.0312                  False
+cores_heuristic rule_lookup steady_heavy  9       2.4030      1.9501       2.7558            10.4054   0.0000    0.0001      0.0039                   True
+cores_heuristic rule_lookup        spike  5       2.1065      1.7364       2.4402             9.8496   0.0005    0.0067      0.0625                   True
+cores_heuristic rule_lookup       relief  4       1.3239      1.1007       1.6141             7.0530   0.0036    0.0466      0.1250                   True
+cores_heuristic rule_lookup         ramp  6       0.5640      0.1261       0.8836             2.5527   0.0515    0.2012      0.0938                  False
+
+5. Skipped runs and paging events
+skipped runs (RAM guard): 17 -> skipped_runs_v7.csv
+paging-flagged runs: 106
+ prompt_id     scenario         condition  max_segment_system_pages_input  latency_seconds
+        21 steady_heavy            static                           32851          32.0089
+        21         ramp   bandit_adaptive                            2522          21.7410
+        21         ramp            static                           32155         163.3028
+        21         ramp         threads_2                            8989          24.1818
+        21        spike            static                           11793          38.1286
+        21        spike       rule_lookup                            1421          21.2488
+        21        spike latency_optimized                            9885          22.2976
+        21        spike          balanced                          178630          23.7637
+        21       relief       rule_lookup                            1300          19.2397
+        21       relief           rule_v5                            6100          24.0389
+        21  steady_idle           rule_v5                            7749          16.7177
+        21  steady_idle         threads_2                           99522          21.3370
+        21  steady_idle latency_optimized                            1151          16.7847
+        22  steady_idle   bandit_adaptive                            1337          18.8864
+        22        spike           rule_v5                          186606          25.7394
+        22        spike         threads_2                            2662          24.5333
+        22        spike          balanced                            3936          22.5611
+        22         ramp   cores_heuristic                           87995         123.8556
+        22         ramp            static                           16842          51.7487
+        22         ramp       rl_adaptive                            6222          27.1895
+        22         ramp   bandit_adaptive                            1462          23.0197
+        22         ramp latency_optimized                            4969          22.4088
+        22       relief   bandit_adaptive                           11983          20.0650
+        22       relief         threads_2                            8032          22.9685
+        22       relief       rl_adaptive                            1721          22.2683
+        22       relief       rule_lookup                            4505          18.9563
+        22       relief   cores_heuristic                           11572          19.9766
+        22       relief          balanced                            7500          20.7136
+        22 steady_heavy           rule_v5                            1104          23.2122
+        22 steady_heavy latency_optimized                            1260          25.5056
+        23  steady_idle          balanced                            3065          18.7580
+        23  steady_idle       rl_adaptive                            2518          16.5861
+        23  steady_idle           rule_v5                            1214          16.5601
+        23  steady_idle   cores_heuristic                            1128          16.7611
+        23        spike   bandit_adaptive                           32785          21.4994
+        23        spike   cores_heuristic                            4884          23.1285
+        23        spike           rule_v5                            3653          25.0629
+        23        spike latency_optimized                           41124          22.7782
+        23        spike         threads_2                            4345          23.8319
+        23        spike          balanced                            5413          21.9739
+        23       relief       rule_lookup                            5169          18.8360
+        23       relief           rule_v5                            2550          19.3283
+        23         ramp         threads_2                            4246          24.0644
+        23         ramp            static                            2145          26.8417
+        23 steady_heavy            static                            1380          36.0580
+        23 steady_heavy   bandit_adaptive                            9619          24.8738
+        23 steady_heavy          balanced                            3528          24.2116
+        24        spike            static                            5031          25.8263
+        24        spike   cores_heuristic                           22671          24.3408
+        24        spike         threads_2                            1711          24.0969
+        24        spike latency_optimized                            8500          25.7611
+        24         ramp            static                            6911          93.2125
+        24         ramp         threads_2                            2878          24.2907
+        24         ramp           rule_v5                           14277          57.6699
+        24         ramp   cores_heuristic                           77481          23.3502
+        24         ramp       rule_lookup                            1434          22.8708
+        24         ramp          balanced                            4767          22.7331
+        24       relief       rule_lookup                            2785          19.2194
+        24 steady_heavy         threads_2                          155667          26.3408
+        24 steady_heavy          balanced                            1286          23.3705
+        24 steady_heavy       rl_adaptive                            3067          26.8050
+        24  steady_idle       rl_adaptive                           26140          16.9221
+        24  steady_idle   cores_heuristic                            2413          16.6809
+        25         ramp           rule_v5                            8130          26.6359
+        25         ramp       rl_adaptive                            1304          42.1417
+        25        spike       rule_lookup                            1661          21.2619
+        25  steady_idle          balanced                            6497          19.0489
+        25  steady_idle           rule_v5                            1038          16.7673
+        25 steady_heavy           rule_v5                            1734          32.9442
+        26 steady_heavy latency_optimized                            2672          25.6011
+        26         ramp       rl_adaptive                           21214          29.2911
+        26        spike       rule_lookup                            1804          21.1541
+        26        spike       rl_adaptive                            2007          25.6351
+        26        spike         threads_2                            2279          24.0377
+        26       relief         threads_2                          172156          22.4591
+        27       relief   cores_heuristic                            5419          19.9866
+        27       relief           rule_v5                           25207          19.1173
+        27  steady_idle            static                            5537          16.7941
+        27  steady_idle   bandit_adaptive                            5144          16.6322
+        27  steady_idle       rule_lookup                            2263          16.5662
+        27         ramp          balanced                            1197          22.3646
+        28 steady_heavy latency_optimized                            7606          25.8084
+        28         ramp          balanced                            2256          22.5828
+        28         ramp   cores_heuristic                            1509          22.8845
+        28       relief latency_optimized                           43508          19.9026
+        29  steady_idle         threads_2                            5194          20.6780
+        29       relief       rule_lookup                            2616          19.3086
+        29 steady_heavy            static                            3741          35.5306
+        29         ramp            static                           87119         123.5967
+        29         ramp         threads_2                            3635          24.1752
+        30 steady_heavy           rule_v5                           19003          23.9538
+        30 steady_heavy          balanced                           12107          23.5537
+        30 steady_heavy         threads_2                            5119          26.1729
+        30 steady_heavy       rule_lookup                            5371          24.7880
+        30 steady_heavy       rl_adaptive                            3620          32.1746
+        30       relief           rule_v5                           35865          35.6192
+        30  steady_idle          balanced                            7075          19.2419
+        30  steady_idle       rule_lookup                            4910          16.7309
+        30        spike         threads_2                           50752          25.3648
+        30        spike          balanced                           32759          23.1424
+        30 steady_heavy            static                           22191          34.7028
+        30 steady_heavy   cores_heuristic                           19342          26.2558
+        30       relief   bandit_adaptive                            4486          19.2239
+        30         ramp       rule_lookup                            4230          22.0946
+        30         ramp            static                          109265         132.1977
+        30         ramp latency_optimized                            3674          24.9259
+tag  context_id  prompt_id     scenario         condition  run_order  ram_percent  available_mb  retries  max_ram_percent                                 reason                              commit_hash          wall_clock
+ v7           9         22       relief       rl_adaptive          3         87.8        1955.6       10             85.0 RAM 87.8% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T00:05:30
+ v7           9         22       relief       rule_lookup          4         87.7        1971.5       10             85.0 RAM 87.7% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T00:10:30
+ v7           9         22       relief   cores_heuristic          5         87.7        1970.0       10             85.0 RAM 87.7% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T00:15:30
+ v7           9         22       relief latency_optimized          6         87.2        2050.8       10             85.0 RAM 87.2% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T00:20:30
+ v7           9         22       relief            static          7         88.6        1837.6       10             85.0 RAM 88.6% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T00:25:30
+ v7          46         30 steady_heavy            static          7         85.3        2369.6       10             85.0 RAM 85.3% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T11:25:46
+ v7          46         30 steady_heavy   cores_heuristic          8         86.2        2211.1       10             85.0 RAM 86.2% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T11:30:46
+ v7          47         30       relief   bandit_adaptive          4         86.5        2163.0       10             85.0 RAM 86.5% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T11:45:19
+ v7          47         30       relief latency_optimized          5         86.5        2167.5       10             85.0 RAM 86.5% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T11:50:19
+ v7          47         30       relief            static          6         87.1        2066.9       10             85.0 RAM 87.1% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T11:55:19
+ v7          47         30       relief   cores_heuristic          8         86.9        2097.0       10             85.0 RAM 86.9% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:03:59
+ v7          48         30         ramp           rule_v5          0         85.5        2334.7       10             85.0 RAM 85.5% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:08:59
+ v7          48         30         ramp       rule_lookup          1         86.2        2225.0       10             85.0 RAM 86.2% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:13:59
+ v7          48         30         ramp         threads_2          2         86.7        2139.5       10             85.0 RAM 86.7% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:18:59
+ v7          48         30         ramp   cores_heuristic          3         86.3        2202.5       10             85.0 RAM 86.3% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:23:59
+ v7          48         30         ramp            static          4         86.9        2112.6       10             85.0 RAM 86.9% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:28:59
+ v7          48         30         ramp latency_optimized          5         86.5        2175.3       10             85.0 RAM 86.5% above 85.0% after 10 retries 0a8e3b2a687dbe05781c2f973614231b946af6f3 2026-10-19T12:33:59
+
+6. Plots: results/v7/latency_by_scenario_v7.png, results/v7/spike_timeline_*.png, results/v7/ramp_timeline_*.png

@@ -1,0 +1,10 @@
+{
+  "cpu_model": "13th Gen Intel(R) Core(TM) i5-13450HX",
+  "physical_cores": 10,
+  "logical_cores": 16,
+  "total_ram_gb": 15.69,
+  "windows_build": "10.0.26300",
+  "python": "3.13.6",
+  "torch": "2.13.0+cpu",
+  "transformers": "5.14.1"
+}

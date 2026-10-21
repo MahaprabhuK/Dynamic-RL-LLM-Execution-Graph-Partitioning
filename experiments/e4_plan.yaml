@@ -12,11 +12,6 @@ prompts:
 - 28
 - 29
 - 30
-- 31
-- 32
-- 33
-- 34
-- 35
 max_new_tokens: 200
 ignore_eos: true
 seed: 11
@@ -103,7 +98,7 @@ conditions:
   seed: 11
 condition_order: randomised within each context (prompt x scenario), seeded; scenario
   order per prompt seeded
-total_runs: 675
+total_runs: 450
 primary_analysis:
   test: paired t-test on per-context latency (seconds), two-sided
   correction: Holm over the 20 tests below, alpha 0.05
@@ -177,3 +172,11 @@ sensitivity: same tables with paging-flagged runs (paging_flag) removed, labelle
   as sensitivity
 night_1: prompts 21-28
 night_2: prompts 29-35
+amendments:
+- date: '2026-10-18'
+  change: prompts 21-30 instead of 21-35 (10 contexts per scenario); total_runs 675 -> 450
+  reason: limited hardware time
+  decided: before any analysis of main-run outcomes
+  unchanged: analysis family (primary_analysis tests and correction), conditions, scenarios and seeds
+  resume: seeded order for prompts 21-30 is identical to the original plan; all 67 existing rows match
+    context_id and run_order

@@ -1,0 +1,16 @@
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 (float32)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   5%|5         | 11/201 [00:00<00:01, 103.86it/s]Loading weights:  27%|##6       | 54/201 [00:00<00:00, 289.10it/s]Loading weights:  42%|####1     | 84/201 [00:00<00:00, 278.33it/s]Loading weights:  56%|#####6    | 113/201 [00:00<00:00, 225.00it/s]Loading weights:  68%|######8   | 137/201 [00:00<00:00, 205.80it/s]Loading weights:  79%|#######9  | 159/201 [00:00<00:00, 201.45it/s]Loading weights:  90%|########9 | 180/201 [00:00<00:00, 174.47it/s]Loading weights:  99%|#########9| 199/201 [00:01<00:00, 165.32it/s]Loading weights: 100%|##########| 201/201 [00:01<00:00, 191.02it/s]
+Model loaded successfully!
+================================================================================
+v7 RUN tag=v7 plan=e4_plan.yaml commit=ecec5690ce
+75 contexts x 9 conditions = 675 runs; 0 already done; 200 tokens
+================================================================================
+[ctx 001/75] prompt 21 steady_heavy: cores_heuristic=25.2DQN model loaded from: C:\Users\Mahaprabhu K\Studies\Machine Learning\Dynamic-RL-LLM-Execution-Graph-Partitioning\data\processed\dqn_model_v7.pth (action_size=6)
+ rl_adaptive=24.5 latency_optimized=25.5 balanced=24.6 bandit_adaptive=24.7 rule_v5=24.1 rule_lookup=24.2 threads_2=25.9 static=32.0 | 351 runs left, ETA 2.7 h
+[ctx 002/75] prompt 21 ramp        : rl_adaptive=28.4 latency_optimized=22.9 cores_heuristic=22.7 bandit_adaptive=21.7 rule_lookup=21.8 static=163.3 threads_2=24.2 rule_v5=27.3 balanced=22.6 | 342 runs left, ETA 3.2 h
+[ctx 003/75] prompt 21 spike       : threads_2=24.4 rule_v5=23.9 static=38.1 rule_lookup=21.2 bandit_adaptive=21.6 cores_heuristic=23.8 latency_optimized=22.3 balanced=23.8 rl_adaptive=24.3 | 333 runs left, ETA 2.9 h
+[ctx 004/75] prompt 21 relief      : balanced=21.7 rule_lookup=19.2 rule_v5=24.0 cores_heuristic=20.2 static=20.3 latency_optimized=19.6 bandit_adaptive=20.4 rl_adaptive=19.4 threads_2=22.4 | 324 runs left, ETA 2.6 h
+[ctx 005/75] prompt 21 steady_idle : rl_adaptive=16.7 rule_v5=16.7 balanced=19.0 threads_2=21.3 static=16.8 rule_lookup=16.7 cores_heuristic=16.7 bandit_adaptive=18.8 latency_optimized=16.8 | 315 runs left, ETA 2.4 h
+[ctx 006/75] prompt 22 steady_idle : latency_optimized=16.9 threads_2=20.5 rule_v5=16.8 rule_lookup=16.6 cores_heuristic=16.8 rl_adaptive=16.7 balanced=19.0 bandit_adaptive=18.9 static=16.8 | 306 runs left, ETA 2.2 h
+[ctx 007/75] prompt 22 spike       : rule_lookup=21.1 rule_v5=25.7 threads_2=24.5 static=25.6 bandit_adaptive=22.4 rl_adaptive=23.3 balanced=22.6 latency_optimized=22.7 cores_heuristic=23.4 | 297 runs left, ETA 2.1 h
+[ctx 008/75] prompt 22 ramp        : rule_v5=24.0 threads_2=24.1 rule_lookup=22.1 cores_heuristic=123.9

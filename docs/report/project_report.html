@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Dynamic RL-Based LLM Execution Graph Partitioning: Project Report</title>
+<title>Dynamic RL-Based LLM Execution Graph Partitioning: Project Report (superseded)</title>
 <style>
   @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
   body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 10.3pt; line-height: 1.45; color: #1d1d1f; }
@@ -36,16 +36,18 @@
 <body>
 
 <h1>Dynamic RL-Based LLM Execution Graph Partitioning</h1>
-<div class="subtitle">Project report: dataset pipeline, v5r statistical reanalysis, and the v6 policy framework</div>
+<div class="subtitle">Project report: dataset pipeline, v5r statistical reanalysis, the v6 policy framework, and the pre-registered v7 main run</div>
 
 <table class="meta">
 <tr><td>Author</td><td>Mahaprabhu K</td></tr>
-<tr><td>Report date</td><td>12 October 2026</td></tr>
+<tr><td>Report date</td><td>12 October 2026; v7 main-run results added 19 October 2026 (section 16)</td></tr>
 <tr><td>Repository</td><td>github.com/MahaprabhuK/Dynamic-RL-LLM-Execution-Graph-Partitioning</td></tr>
 <tr><td>Working branch</td><td><code>improve/meaningful-partitioning</code> (main has the original v1 pipeline)</td></tr>
 <tr><td>Model</td><td>TinyLlama/TinyLlama-1.1B-Chat-v1.0, float32, CPU only</td></tr>
 <tr><td>Hardware</td><td>Laptop, 10 physical / 16 logical CPU cores, 16 GB RAM (RTX 3050 present but unused; torch is a CPU build)</td></tr>
 </table>
+
+<div class="warn"><b>Superseded.</b> This report (12 October 2026, with an interim v7 section added 19 October) is superseded by <code>final_report.html</code> in this folder, which revises the v7 headline, provenance and threats to validity. It is kept unchanged otherwise for the record.</div>
 
 <div class="warn"><b>Statistical correction (12 October 2026).</b> The original v5 prose used latency-only outlier exclusions and unadjusted interval-based significance labels. The source CSV has no independent paging telemetry. The v5r reanalysis in <code>data/processed/adaptive_report_v5r.txt</code> retains all 40 contexts, reports paired t and Wilcoxon tests with Holm-adjusted p-values, and supersedes the original v5 inferential claims below. Earlier v3/v4 significance labels are historical and have not been recomputed here.</div>
 
@@ -65,7 +67,8 @@
 <li>Methodology and statistics</li>
 <li>Engineering, testing and reproducibility</li>
 <li>Limitations and open problems</li>
-<li>Next steps</li>
+<li>Implementation status, v6 load sweep, and deferred experiments</li>
+<li>Phase 8 (v7): pre-registered main run</li>
 <li>Appendix: files, commands and data index</li>
 </ol>
 
@@ -73,7 +76,13 @@
 <p>The project builds a scheduler that decides, for each LLM request on a single CPU machine, how the model should be executed. TinyLlama-1.1B runs layer by layer through a hand-written decode loop. The action space is three thread budgets: {3, 6, 10} threads. Layer staging is the execution mechanism used to enforce these budgets across the 22 decoder layers: <code>static</code> executes all 22 layers in a single stage with 10 threads; <code>latency_optimized</code> executes all 22 layers in a single stage with 6 threads; and <code>balanced</code> splits the layers into two sequential stages (layers 0-10 and 11-21) executed one after the other at 3 threads each, running at a 3-thread budget throughout generation. Because execution is single-device CPU inference, stages run sequentially without parallel pipelining. All three strategies yield token-identical output to Hugging Face <code>model.generate()</code>, so the choice only affects latency.</p>
 <p>The work went through seven phases. The early versions (v1/v2) produced results that turned out to be noise, because the strategies were computationally identical and were measured one after another. v3 fixed both problems. Strategies now differ in thread budgets {3, 6, 10}, and measurements are paired and randomized under controlled background CPU load. A contextual-bandit DQN was then trained on the v3 data. After that the project moved to its main idea, <b>re-deciding the strategy every 10 tokens during generation</b>, plus an online bandit that keeps learning from measured token latency.</p>
 <div class="box">
-<b>Main results</b>
+<b>v7 main run (pre-registered, 450 runs; section 16)</b>
+<ul>
+<li>The lookup rule built from the v7 load sweep (<code>rule_lookup</code>) was the fastest condition on average in four of five scenarios. It beat fixed <code>threads_2</code> in all five scenarios (-8% to -20%) and fixed <code>balanced</code> in steady_idle, spike and relief (-13%, -5%, -9%), all Holm-significant over the 20 pre-registered tests. Against <code>balanced</code> in steady_heavy and ramp, the differences (-2%) did not survive Holm correction.</li>
+<li>The re-trained DQN (<code>rl_adaptive</code>) was slower than <code>rule_lookup</code> in every scenario, significantly so in four (+10% to +60%). The core-count heuristic was also significantly slower in three. Learning did not beat a simple measured lookup table on this machine.</li>
+<li>106 of 450 runs had a paging event. With those removed (n = 3-9 per test) the direction of every primary effect is unchanged, but fewer tests survive Holm correction.</li>
+</ul>
+<b>Earlier results (v3-v5)</b>
 <ul>
 <li>Which strategy is fastest depends on load. Idle machine: 10 threads (<code>static</code>) wins. Around 8 busy workers: 6 threads. At 10-14 busy workers: 3+3 threads (<code>balanced</code>). At 12 workers <code>static</code> oversubscribes the CPU and is about 18x slower per token than <code>balanced</code> (2.14 s vs 0.116 s per token).</li>
 <li>In all five scenarios, the re-deciding DQN (<code>rl_adaptive</code>) and the 60% threshold rule (<code>rule_adaptive</code>) are statistically indistinguishable (Holm-adjusted p = 1.0, mean differences -0.6 to +12.5 s). The gain comes from intra-generation re-deciding, not from reinforcement learning.</li>
@@ -101,6 +110,9 @@
 <tr><td>11 Oct 2026</td><td>6d5a62b</td><td>v4: online contextual bandit, non-blocking telemetry, token-triggered load, resume and report-only modes</td></tr>
 <tr><td>11 Oct 2026</td><td>3c2fc89</td><td>Robust bandit (stall rejection, bin hysteresis), load sweep, ramp scenario</td></tr>
 <tr><td>11-12 Oct 2026</td><td>this commit</td><td>v5 run finished overnight (40 contexts x 7 conditions), <code>--keep-awake</code> flag, v5 results, this report</td></tr>
+<tr><td>13 Oct 2026</td><td>e9a9fad - ecec569</td><td>v7 engine (arms 2-10 threads, segment and system-paging telemetry, RAM guard), v7 load sweep (288 runs), <code>rule_lookup</code>, reaction-delay pilot, DQN v7, bandit prior, pre-registered main-run plan; main run starts (67 runs)</td></tr>
+<tr><td>17-18 Oct 2026</td><td>4d6896e - 0a8e3b2</td><td>Machine fingerprint, CPU capacity and sanity gates; power-plan fixes; plan amended to prompts 21-30 (450 runs)</td></tr>
+<tr><td>18-19 Oct 2026</td><td>this commit</td><td>v7 main run finished (450/450), final checks, analysis (section 16)</td></tr>
 </table>
 
 <h2>4. System design</h2>
@@ -377,15 +389,96 @@
 <li><b>Scope and limitation:</b> The training and validation sets were formed across background contention conditions for <b>Prompt 1</b> (repeats 0 &amp; 1 for training, repeat 2 for validation). Consequently, <i>generalization to unseen prompts has not yet been demonstrated</i> in this offline experiment.</li>
 </ul>
 
-<h3>15.4 Deferred experimental gates</h3>
+<h3>15.4 Deferred experimental gates (status at 12 October; both were later run under the v7 plan, see section 16)</h3>
 <ol>
 <li><b>Gate 1 (P1.2 Pilot ablation):</b> Script <code>run_pilot_ablation.py</code> is ready to evaluate decision interval &times; patience &times; emergency switch on <code>spike</code> and <code>ramp</code> scenarios (~55 minutes). Deferred pending explicit approval.</li>
 <li><b>Gate 4 (P1.5 Full v6 live evaluation benchmark):</b> Full comparison across 15 contexts &times; 5 scenarios &times; 9 conditions (675 requests, ~14 hours) using <code>evaluate_adaptive.py --tag v6 --keep-awake --resume</code>. Deferred pending explicit approval.</li>
 </ol>
 
 <div class="pb"></div>
-<h2>16. Appendix: files, commands and data index</h2>
-<h3>16.1 Repository layout</h3>
+<h2>16. Phase 8 (v7): pre-registered main run</h2>
+<p>v7 replaced the three-strategy action space with single-stage thread budgets (2, 3, 4, 6, 10 threads, plus <code>balanced</code> = 3+3 sequential stages), added per-10-token segment logging with a machine-wide paging counter (Windows "Pages Input"), and a RAM guard that waits and then skips a run if RAM is above 85% before it starts. Policies were built and frozen before the main run: <code>rule_lookup</code> maps measured external CPU to the best arm from the v7 load sweep (bins at 63.8 / 75.1 / 83.8% to <code>threads_6</code> / <code>threads_4</code> / <code>balanced</code> / <code>threads_2</code>), with decision interval 10 and patience 1, chosen in a reaction-delay pilot (<code>experiments/e2_frozen.yaml</code>). The DQN was retrained on the v7 sweep. Offline, it did not beat <code>rule_lookup</code> (mean regret 0.0053 vs 0.0014 s/token), and it was kept in the plan as a pre-registered comparison.</p>
+
+<h3>16.1 Design (experiments/e4_plan.yaml)</h3>
+<ul>
+<li>10 prompts (IDs 21-30) x 5 scenarios = 50 contexts, 9 conditions, 450 runs of 200 tokens. Condition order is randomised within each context with seed 11.</li>
+<li>Fixed arms: <code>threads_2</code>, <code>balanced</code> (3+3), <code>latency_optimized</code> (6), <code>static</code> (10). Adaptive: <code>rule_v5</code> (old 60% threshold), <code>rule_lookup</code>, <code>cores_heuristic</code>, <code>rl_adaptive</code> (DQN v7), <code>bandit_adaptive</code>.</li>
+<li>Primary analysis: 20 paired t-tests on per-context latency (rule_lookup vs balanced and vs threads_2; rl_adaptive vs rule_lookup; cores_heuristic vs rule_lookup; each in 5 scenarios). Holm correction over all 20 tests at alpha 0.05, with Wilcoxon p and 95% bootstrap CIs alongside. No exclusions. Sensitivity analysis: the same tables with paging-flagged runs removed.</li>
+<li>Amendment (18 Oct, before any analysis of main-run outcomes): prompts 21-30 instead of 21-35 (675 to 450 runs) because of limited machine time. Conditions, scenarios, seeds and the test family were unchanged, and the 67 runs already made matched the amended order. The resume plan did print median latencies per condition from those 67 runs, as a time estimate, before the amendment.</li>
+</ul>
+
+<h3>16.2 Mean latency (seconds, 200 tokens, n = 10 per cell)</h3>
+<table>
+<tr><th>Scenario</th><th class="n">threads_2</th><th class="n">balanced</th><th class="n">latency_opt</th><th class="n">static</th><th class="n">rule_v5</th><th class="n">rule_lookup</th><th class="n">cores_heur.</th><th class="n">rl_adaptive</th><th class="n">bandit</th></tr>
+<tr><td>steady_idle</td><td class="n">20.55</td><td class="n">18.96</td><td class="n">16.44</td><td class="n">16.69</td><td class="n">16.69</td><td class="n"><b>16.42</b></td><td class="n">16.67</td><td class="n">16.72</td><td class="n">16.91</td></tr>
+<tr><td>steady_heavy</td><td class="n">25.82</td><td class="n">23.70</td><td class="n">25.47</td><td class="n">30.94</td><td class="n">24.62</td><td class="n"><b>23.26</b></td><td class="n">25.57</td><td class="n">28.12</td><td class="n">23.49</td></tr>
+<tr><td>spike</td><td class="n">24.23</td><td class="n">22.33</td><td class="n">22.97</td><td class="n">30.33</td><td class="n">23.28</td><td class="n"><b>21.25</b></td><td class="n">23.57</td><td class="n">24.26</td><td class="n">22.43</td></tr>
+<tr><td>relief</td><td class="n">22.53</td><td class="n">20.77</td><td class="n">19.60</td><td class="n">21.15</td><td class="n">21.97</td><td class="n"><b>18.93</b></td><td class="n">20.03</td><td class="n">20.81</td><td class="n">19.87</td></tr>
+<tr><td>ramp</td><td class="n">24.13</td><td class="n">22.69</td><td class="n">24.08</td><td class="n">90.60</td><td class="n">40.63</td><td class="n">22.15</td><td class="n">32.85</td><td class="n">35.43</td><td class="n"><b>21.96</b></td></tr>
+</table>
+<p class="small">From <code>experiments/e4_latency.csv</code>. Bold = lowest mean in the row. Means of the slow conditions in ramp are driven by single runs above the oversubscription cliff (static up to 163 s, cores_heuristic one run at 123.9 s during a paging burst).</p>
+<figure><img src="../../results/v7/latency_by_scenario_v7.png"><figcaption>Figure 5. v7 main run: mean (bar), per-context values (dots) and median (red tick) per condition and scenario.</figcaption></figure>
+
+<h3>16.3 Pre-registered tests (a - b, negative = a faster; Holm over 20)</h3>
+<table>
+<tr><th>a vs b</th><th>Scenario</th><th class="n">Mean diff (s)</th><th class="n">%</th><th>95% CI (s)</th><th class="n">Holm p</th><th>Verdict</th></tr>
+<tr><td rowspan="5">rule_lookup vs balanced</td><td>steady_idle</td><td class="n">-2.53</td><td class="n">-13.4</td><td>[-2.69, -2.39]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>steady_heavy</td><td class="n">-0.44</td><td class="n">-1.9</td><td>[-0.91, 0.07]</td><td class="n">0.254</td><td>not significant</td></tr>
+<tr><td>spike</td><td class="n">-1.08</td><td class="n">-4.8</td><td>[-1.47, -0.74]</td><td class="n">0.0038</td><td>significant</td></tr>
+<tr><td>relief</td><td class="n">-1.84</td><td class="n">-8.9</td><td>[-2.04, -1.65]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>ramp</td><td class="n">-0.54</td><td class="n">-2.4</td><td>[-0.85, -0.20]</td><td class="n">0.053</td><td>not significant</td></tr>
+<tr><td rowspan="5">rule_lookup vs threads_2</td><td>steady_idle</td><td class="n">-4.12</td><td class="n">-20.1</td><td>[-4.30, -3.97]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>steady_heavy</td><td class="n">-2.56</td><td class="n">-9.9</td><td>[-2.90, -2.16]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>spike</td><td class="n">-2.98</td><td class="n">-12.3</td><td>[-3.19, -2.77]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>relief</td><td class="n">-3.60</td><td class="n">-16.0</td><td>[-3.86, -3.36]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td>ramp</td><td class="n">-1.98</td><td class="n">-8.2</td><td>[-2.31, -1.57]</td><td class="n">&lt;0.0001</td><td>significant</td></tr>
+<tr><td rowspan="5">rl_adaptive vs rule_lookup</td><td>steady_idle</td><td class="n">+0.29</td><td class="n">+1.8</td><td>[0.13, 0.47]</td><td class="n">0.053</td><td>not significant</td></tr>
+<tr class="bad"><td>steady_heavy</td><td class="n">+4.85</td><td class="n">+20.9</td><td>[2.63, 7.20]</td><td class="n">0.021</td><td>significant (DQN slower)</td></tr>
+<tr class="bad"><td>spike</td><td class="n">+3.01</td><td class="n">+14.1</td><td>[1.91, 4.30]</td><td class="n">0.0088</td><td>significant (DQN slower)</td></tr>
+<tr class="bad"><td>relief</td><td class="n">+1.88</td><td class="n">+9.9</td><td>[1.32, 2.44]</td><td class="n">0.0016</td><td>significant (DQN slower)</td></tr>
+<tr class="bad"><td>ramp</td><td class="n">+13.28</td><td class="n">+59.9</td><td>[8.39, 18.33]</td><td class="n">0.0059</td><td>significant (DQN slower)</td></tr>
+<tr><td rowspan="5">cores_heuristic vs rule_lookup</td><td>steady_idle</td><td class="n">+0.25</td><td class="n">+1.5</td><td>[0.11, 0.40]</td><td class="n">0.053</td><td>not significant</td></tr>
+<tr class="bad"><td>steady_heavy</td><td class="n">+2.31</td><td class="n">+9.9</td><td>[1.87, 2.68]</td><td class="n">&lt;0.0001</td><td>significant (heuristic slower)</td></tr>
+<tr class="bad"><td>spike</td><td class="n">+2.32</td><td class="n">+10.9</td><td>[2.01, 2.66]</td><td class="n">&lt;0.0001</td><td>significant (heuristic slower)</td></tr>
+<tr class="bad"><td>relief</td><td class="n">+1.10</td><td class="n">+5.8</td><td>[0.91, 1.30]</td><td class="n">&lt;0.0001</td><td>significant (heuristic slower)</td></tr>
+<tr><td>ramp</td><td class="n">+10.70</td><td class="n">+48.3</td><td>[0.37, 31.05]</td><td class="n">0.318</td><td>not significant (one 123.9 s run)</td></tr>
+</table>
+<p class="small">n = 10 contexts per test. From <code>experiments/e4_tests.csv</code>. Wilcoxon p-values are in the CSV; at n = 10 the smallest possible two-sided Wilcoxon p is 0.002.</p>
+
+<h3>16.4 Sensitivity: paging-flagged runs removed</h3>
+<p>106 of 450 runs had at least one 10-token segment with 1000 or more system pages input (the pre-registered paging flag). Removing them leaves 3-9 complete pairs per test (<code>experiments/e4_tests_sensitivity.csv</code>). Every mean difference keeps its sign. Holm-significant results drop from 15 to 10. rule_lookup vs threads_2 remains significant in four scenarios (not ramp, Holm p = 0.071). rule_lookup vs balanced remains significant in steady_idle and relief. rl_adaptive vs rule_lookup remains significant only in relief. cores_heuristic vs rule_lookup remains significant in steady_heavy, spike and relief. With n this small, the sensitivity analysis checks direction, not strength.</p>
+
+<h3>16.5 Segment-oracle regret (descriptive)</h3>
+<table>
+<tr><th>Scenario</th><th class="n">Oracle (s)</th><th class="n">Best single fixed (s)</th><th class="n">rule_lookup</th><th class="n">bandit</th><th class="n">cores_heur.</th><th class="n">rl_adaptive</th><th class="n">rule_v5</th></tr>
+<tr><td>steady_idle</td><td class="n">15.33</td><td class="n">15.43</td><td class="n">0.10</td><td class="n">0.57</td><td class="n">0.34</td><td class="n">0.38</td><td class="n">0.36</td></tr>
+<tr><td>steady_heavy</td><td class="n">22.11</td><td class="n">22.36</td><td class="n">-0.11</td><td class="n">0.06</td><td class="n">2.07</td><td class="n">4.66</td><td class="n">1.17</td></tr>
+<tr><td>spike</td><td class="n">19.96</td><td class="n">20.92</td><td class="n">0.09</td><td class="n">1.23</td><td class="n">2.31</td><td class="n">3.09</td><td class="n">2.05</td></tr>
+<tr><td>relief</td><td class="n">17.69</td><td class="n">18.49</td><td class="n">0.14</td><td class="n">1.05</td><td class="n">1.19</td><td class="n">2.00</td><td class="n">3.10</td></tr>
+<tr><td>ramp</td><td class="n">19.53</td><td class="n">21.37</td><td class="n">1.41</td><td class="n">1.22</td><td class="n">11.95</td><td class="n">14.59</td><td class="n">19.83</td></tr>
+</table>
+<p class="small">Summed token seconds; regret = policy minus per-segment oracle over the four fixed arms (<code>experiments/e4_segment_oracle.csv</code>). The oracle only chooses among the four fixed arms, so a policy that uses other arms (threads_4, threads_6) can come out below it, as rule_lookup does in steady_heavy.</p>
+
+<h3>16.6 Reading</h3>
+<ul>
+<li>A lookup table built from a direct load sweep on the same machine was the most reliable policy: close to the per-segment oracle in four scenarios and within 1.4 s in ramp.</li>
+<li>Re-deciding during generation helps when the policy's map from load to arm is accurate. The DQN, trained on the same sweep, picked worse arms under load and switched more (10.3 switches per request in steady_heavy vs 2.6 for rule_lookup). The online bandit (descriptive only, not in the test family) ended up close to rule_lookup, with a lower mean in ramp.</li>
+<li>Fixed <code>static</code> (10 threads) still falls off the oversubscription cliff in ramp and is the worst arm under load. Under idle conditions, 6 to 10 threads are all within about 2% of each other.</li>
+</ul>
+
+<h3>16.7 Run integrity and deviations</h3>
+<ul>
+<li>All 450 runs present, 50 of 50 contexts complete, token IDs identical across conditions in every context, every run generated 200 tokens, fixed arms never switched, no duplicate cells (<code>experiments/check_main_final.txt</code>).</li>
+<li>Two run commits: 67 runs at ecec569 (13 Oct), 383 at 0a8e3b2 (18-19 Oct). The code diff between them on run code and configs is only the plan amendment in <code>e4_plan.yaml</code>; <code>run_main_v7.cmd</code> (the launcher with the gates) was added. The 383 later rows carry <code>tree_dirty = True</code> because the run's own output CSVs in <code>data/processed</code> are tracked and change as it writes, and the pre-run gates rewrite two tracked check reports; no code file was modified during the run.</li>
+<li>Between sessions the laptop was found throttled to about 37% CPU (core parking). After power-plan fixes, a CPU capacity check (100% with 16 busy workers) and a sanity check (threads_2 and balanced within 25% of the sweep, RAM below 85%) gated every resume. One resume attempt was stopped by the sanity check (balanced +81%) and the next one passed.</li>
+<li>RAM was the binding constraint. With the fp32 model loaded, RAM sat at 80-86%. The guard skipped 17 runs in total (<code>skipped_runs_v7.csv</code>); all 17 were run later with <code>--resume</code>, so some contexts were measured over a longer span than planned: context 9 (prompt 22, relief) ran 3 conditions on 18 Oct at 23:59 and the other 6 on 19 Oct at 08:44; contexts 46-48 (prompt 30) each span up to 2 hours. Context 8 spans the 13 and 18 Oct sessions. The run process was restarted once on 19 Oct during a guard wait; the run in progress had not been written and was redone.</li>
+<li>RAM before runs: min 79.8%, median 82.7%, max 85.0%.</li>
+</ul>
+
+<div class="warn">Scope: one laptop (10 physical / 16 logical cores, 16 GB), one 1.1B model in fp32 on CPU, synthetic busy-loop load, 10 prompts. The arm map in <code>rule_lookup</code> is specific to this machine and was measured on it, which is also why it does well here. A different machine needs a new sweep. Memory pressure was close to the guard throughout and paging affected about a quarter of runs. The sensitivity analysis keeps every direction but has small n.</div>
+
+<h2>17. Appendix: files, commands and data index</h2>
+<h3>17.1 Repository layout</h3>
 <pre>configs/config.yaml            model + strategy definitions
 src/config.py                  config loader
 src/data/                      Alpaca download, preprocessing, prompt loading
@@ -404,7 +497,7 @@ run_overnight.cmd              historical unattended v5 run command
 tests/                         pipeline, adaptive and model-equivalence tests
 docs/report/                   this HTML report source</pre>
 
-<h3>16.2 Reproducing the results</h3>
+<h3>17.2 Reproducing the results</h3>
 <pre>python -m src.data.download_dataset
 python -m src.data.preprocess_dataset
 python -m pytest tests/test_functional_equivalence.py -v
@@ -424,7 +517,12 @@ python -m pytest tests/test_pipeline.py tests/test_adaptive.py</pre>
   --switch-token 60 --ramp "60:8,140:12" --interval 10 --patience 2 \
   --thread-budgets "2,4,6,8,10,12" --emergency-threshold 85</pre>
 
-<h3>16.3 Data index (data/processed)</h3>
+<h4>v7 main run</h4>
+<pre>run_main_v7.cmd [22,23,24]           machine, CPU-capacity and sanity gates, then run_v7.py --resume
+python experiments/check_main_partial.py v7
+python experiments/analyze_v7.py     writes experiments/e4_*.csv, e4_summary.txt, results/v7/*.png</pre>
+
+<h3>17.3 Data index (data/processed)</h3>
 <table>
 <tr><th>Files</th><th>Contents</th></tr>
 <tr><td><code>prompts.csv</code>, <code>inference_results.csv</code>, <code>runtime_metrics.csv</code></td><td>v1 prompts, inference and telemetry</td></tr>
@@ -438,6 +536,9 @@ python -m pytest tests/test_pipeline.py tests/test_adaptive.py</pre>
 <tr><td><code>adaptive_*_v5.csv</code>, <code>adaptive_report_v5.txt</code>, <code>adaptive_bandit_state_v5.json</code></td><td>v5 runs with the ramp scenario</td></tr>
 <tr><td><code>adaptive_exclusions_v5r.csv</code>, <code>adaptive_summary_v5r.csv</code>, <code>adaptive_paired_diffs_v5r.csv</code>, <code>adaptive_report_v5r.txt</code></td><td>all-context primary reanalysis; no paging-based exclusions</td></tr>
 <tr><td><code>adaptive_summary_sensitivity_v5r.csv</code>, <code>adaptive_paired_diffs_sensitivity_v5r.csv</code></td><td>separate sensitivity excluding four latency-only heuristic candidates</td></tr>
+<tr><td><code>load_sweep_v7.csv</code></td><td>v7 load sweep (288 runs), source of <code>experiments/e3_rule.yaml</code></td></tr>
+<tr><td><code>v7runs_v7.csv</code>, <code>v7timelines_v7.csv</code>, <code>v7segments_v7.csv</code>, <code>v7decisions_v7.csv</code>, <code>skipped_runs_v7.csv</code></td><td>v7 main run: 450 runs, per-token timelines, per-10-token segments with paging counters, policy decisions, RAM-guard skips (all later re-run)</td></tr>
+<tr><td><code>experiments/e4_*.csv</code>, <code>experiments/e4_summary.txt</code>, <code>experiments/check_main_final.txt</code></td><td>v7 analysis outputs and final integrity checks</td></tr>
 </table>
 <p>Plots for every version are in <code>results/</code> (latency by load or scenario, paired differences, spike and relief timelines).</p>
 

@@ -1,254 +1,116 @@
 # Dynamic RL-Based LLM Execution Graph Partitioning
 
-A reinforcement-learning scheduler that picks how to execute an LLM request on a
-single machine. TinyLlama-1.1B is run layer by layer through a hand-written
-decode loop, and the 22 decoder layers are split into stages. A contextual-bandit
-DQN observes the request and the current system load and chooses the execution
-strategy that it expects to be fastest.
+**Load-adaptive thread scheduling for LLM inference on a CPU**
 
-## Execution strategies
+- Final report (PDF): [docs/report/Final_Report.pdf](docs/report/Final_Report.pdf) (HTML: [docs/report/final_report.html](docs/report/final_report.html))
+- Dashboard / presentation: [docs/dashboard/index.html](docs/dashboard/index.html)
+- Result tables: [experiments/RESULTS.md](experiments/RESULTS.md)
+- How to reproduce: [Setup](#setup) and [Reproducing the v7 stages](#reproducing-the-v7-stages)
+- Hardware the results came from: Intel Core i5-13450HX laptop (10 cores / 16 threads), 16 GB RAM, Windows 11, CPU only
 
-Each strategy is a real execution configuration (`configs/config.yaml`): a layer
-split plus an intra-op thread budget per stage, as a fraction of physical cores.
+Scope: "partitioning" here means splitting the model's layers into stages that each get their own thread budget, run
+one after another on one CPU. Splitting the model across CPU and GPU is future work.
 
-| ID | Strategy | Layer stages | Threads per stage (10-core CPU) |
-|----|----------|--------------|---------------------------------|
-| 0 | `static` | 0-21 | 10 |
-| 1 | `balanced` | 0-10, 11-21 | 3, 3 |
-| 2 | `latency_optimized` | 0-21 | 6 |
+Runs TinyLlama-1.1B (fp32) on one CPU and decides, during generation, how many threads it should use.
+The model runs layer by layer through a hand-written decode loop with one shared KV cache, so the thread budget can change between tokens without changing the output.
+Every 10 tokens a policy reads the CPU load from other processes and picks an arm: 2, 3, 4, 6 or 10 threads, or `balanced` (two sequential 3-thread stages).
+Policies compared: a lookup table measured on this machine (`rule_lookup`), a spare-cores heuristic, an offline DQN, an online bandit, and fixed arms.
+Everything is measured on one laptop (10 cores / 16 threads, 16 GB) under synthetic background load, with paired, randomized runs.
 
-All strategies run in float32 and are checked to produce token-identical output
-to `model.generate()` (`tests/test_functional_equivalence.py`). On an idle
-machine more threads tend to be faster; under background CPU contention fewer
-threads avoid oversubscription. That trade-off is what the scheduler learns.
+The dashboard is one offline HTML file; press P to present (arrows, number keys, N for speaker notes, F for fullscreen). Rebuild with `python experiments/build_dashboard.py`; `python experiments/check_dashboard_numbers.py --selftest` checks every number on it against the CSVs.
 
-## Project layout
+## Main result (v7, pre-registered, 450 runs of 200 tokens)
 
-```
-configs/config.yaml          model + strategy definitions
-src/data/                    Alpaca download, preprocessing, prompt loading
-src/llm/                     model loading, partition strategies, layer-sliced inference
-src/graph/                   execution graph (networkx) annotated with partitions
-src/telemetry/               CPU/RAM metrics, activation handoffs, background load generator
-src/rl/                      features, reward, offline bandit environment, DQN agent, training
-src/scheduler/               RL and static schedulers
-src/benchmark/               bootstrap statistics and plots
-evaluate_fixed_strategies.py collects the paired v3 dataset
-evaluate_rl_policy.py        online evaluation of the trained policy
-evaluate_adaptive.py         re-scheduling during generation under changing load
-tests/                       fast pipeline tests + model equivalence test
-```
+- Against the best fixed arm in each scenario (chosen afterwards from the same data), `rule_lookup` was 0.1% to 4.8% faster, and faster in 10 of 10 contexts when load arrived mid-request (spike).
+- Pre-registered paired t-tests (Holm over 20): faster than fixed `threads_2` in all 5 scenarios (-8% to -20%) and than fixed `balanced` in 3 of 5 (-5% to -13%); 15 of 20 tests significant.
+- An online bandit warm-started from the same sweep nearly tied it; the offline DQN was 10% to 60% slower than `rule_lookup` in 4 of 5 scenarios.
+
+Tables: [experiments/RESULTS.md](experiments/RESULTS.md). Every number in the report is checked against its source by
+`experiments/check_report_numbers.py` (output in `experiments/check_report_numbers.txt`).
 
 ## Setup
 
+Windows, Python 3.13, CPU-only torch (see [experiments/ENVIRONMENT.md](experiments/ENVIRONMENT.md) for exact versions).
+
 ```bash
 python -m venv .venv
-.venv\Scripts\activate          # Windows
+.venv\Scripts\activate
 pip install -r requirements.txt
-
-python -m src.data.download_dataset
-python -m src.data.preprocess_dataset
+python -m src.data.download_dataset        # Alpaca prompts
+python -m src.data.preprocess_dataset      # -> data/processed/prompts.csv
 ```
 
-## Workflow
+Every `python` command in this README means the `.venv` interpreter: activate `.venv` first, or call
+`.venv\Scripts\python.exe` directly (another Python on PATH, such as an msys one, will not have numpy, torch or
+pytest). For example, the checks used for the final submission:
 
-```bash
-# 1. Verify that every strategy reproduces model.generate() exactly (loads the model)
-python -m pytest tests/test_functional_equivalence.py -v
-
-# 2. Collect paired measurements: prompts x repeats x background-load levels.
-#    Each context runs all strategies back-to-back in random order.
-#    20 prompts x 2 repeats x 3 loads x 3 strategies = 360 runs (~2-3 h on CPU).
-python evaluate_fixed_strategies.py --num-prompts 20 --repeats 2 --loads 0,4,8
-
-# 3. Train the contextual-bandit DQN on that data (seconds)
-python -m src.rl.train --csv data/processed/fixed_strategy_metrics_v3.csv --tag v3
-
-# 4. Evaluate the policy online on unseen prompts (prompts 21-30)
-python evaluate_rl_policy.py --prompt-offset 20 --num-prompts 10 --loads 0,4,8
-
-# 5. Intra-generation re-scheduling under changing load (see below)
-#    10 prompts x 4 scenarios x 7 conditions, 200 tokens each (~2.5 h on CPU)
-python evaluate_adaptive.py --num-prompts 10 --prompt-offset 20 --max-new-tokens 200
-
-# Fast tests (no model needed)
-python -m pytest tests/test_pipeline.py tests/test_adaptive.py
+```bat
+set HF_HUB_OFFLINE=1
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe experiments\check_report_numbers.py
+.venv\Scripts\python.exe experiments\check_dashboard_numbers.py --selftest
 ```
 
-## Intra-generation re-scheduling
+The first model load downloads TinyLlama/TinyLlama-1.1B-Chat-v1.0 (about 2.2 GB). After that, run with
+`HF_HUB_OFFLINE=1` (tests included). The fp32 model needs about 4.4 GB of RAM; the v7 runs skip a run when RAM is above 85%, so close
+other applications (including the Claude desktop app and browsers) before long runs.
 
-Per-request schedulers choose a strategy once, before the first token. If the
-system load changes while a long response is being generated, that choice goes
-stale. Because every strategy here shares the same weights and KV cache,
-the engine can switch strategy *between tokens* at no cost and with identical
-output. `generate_partitioned_response(scheduler=..., decision_interval=N)`
-asks a policy (`src/scheduler/adaptive.py`) for a strategy every N tokens.
+## Reproducing the v7 stages
 
-- Live telemetry (`BackgroundLoadSampler`) runs in a daemon thread and
-  subtracts this process's own CPU usage from system CPU, so the policy reacts
-  to *external* contention rather than to its own inference threads. Reading
-  it never blocks generation.
-- Hysteresis (`patience`): a policy only switches after proposing the new
-  strategy in consecutive decisions, which prevents flapping on noisy readings.
-- **Online bandit (`OnlineBanditPolicy`).** Each decision interval is one
-  bandit round: context = external-load bin, arm = strategy, cost = the
-  measured seconds per token of the segment just generated. It is warm-started
-  from the offline DQN's Q-values, uses discounted estimates so stale data is
-  forgotten when the machine's behaviour drifts, and re-checks other
-  strategies with a UCB-style bonus, at the cost of one segment. One instance
-  keeps learning across all requests.
-- `evaluate_adaptive.py` replays load scenarios whose load changes after a
-  fixed number of generated tokens (`steady_idle`, `steady_heavy`, `spike`,
-  `relief`; `TokenScheduledLoad`), so every policy faces the change at the
-  same point. All runs generate exactly `--max-new-tokens` tokens. It compares
-  the three fixed strategies, a threshold rule, the DQN once per request
-  (`rl_once`) and re-deciding (`rl_adaptive`), and the online bandit.
-- Outputs: `data/processed/adaptive_*_v4.csv` and `results/adaptive_*_v4.png`,
-  including per-token timelines of a load spike and a load relief.
+Times are from the runs on 13-19 Oct 2026 on the machine above. Machine runs load the model and take the CPU; run
+them one at a time.
 
-### v4 results (10 prompts x 4 scenarios, 200 tokens, paired)
+| Stage | Command | Output | Time |
+|---|---|---|---|
+| Tests | `set HF_HUB_OFFLINE=1` then `python -m pytest tests` | - | about 1-2 min |
+| 2. Smoke test | `python run_v7.py --plan experiments/smoke_plan.yaml --resume --keep-awake` then `python experiments/check_smoke.py smoke_v7` | `v7*_smoke_v7.csv`, `experiments/check_smoke_smoke_v7.txt` | about 1 min |
+| 3. Load sweep (288 runs) | `python run_load_sweep_v7.py --resume --keep-awake`, then `--summary-only` | `data/processed/load_sweep_v7.csv`, `experiments/e1_summary.txt` | about 3 h |
+| 4. Lookup rule | `python experiments/build_rule_v7.py` | `experiments/e3_rule.yaml`, `e3_offline_policies.csv` | seconds |
+| 5. Reaction-delay pilot (84 runs) | `python run_v7.py --plan experiments/e2_plan.yaml --resume --keep-awake` then `python experiments/analyze_e2.py` | `v7*_pilot_v7.csv`, `experiments/e2_summary.*`, `e2_frozen.yaml` | about 1 h |
+| 6. DQN v7, bandit prior, plan | `python experiments/train_dqn_v7.py` then `python experiments/build_e4_plan.py` | `data/processed/dqn_model_v7.pth`, `experiments/e3_dqn_v7.*`, `e4_bandit_prior.yaml`, `e4_plan.yaml` | about 1 min |
+| 7. Main run (450 runs) | `run_main_v7.cmd` (optionally `run_main_v7.cmd 22,23,24` for a subset of prompts) | `data/processed/v7*_v7.csv`, `logs/main_v7_<date>.log` | about 3.5 h of runs, plus about 2 min of checks per start |
+| 8. Analysis | `python experiments/analyze_v7.py` then `python experiments/analyze_main_v7.py` | `experiments/e4_*.csv`, `e4_summary.txt`, `e4_supplement.txt`, `results/v7/*.png` | under 1 min |
+| Report tables and checks | `python experiments/build_report_tables.py`, `python experiments/build_results_md.py`, `python experiments/check_report_numbers.py` | `docs/report/final_report.html` tables, `experiments/RESULTS.md`, `experiments/check_report_numbers.txt` | seconds |
 
-The historical v4 summary excluded two latency-outlier candidates using
-`stalled_contexts()`; its CSV has no page-fault or swap counters, so the paging
-label is unverified. Generated tokens were identical across all conditions in
-100% of contexts.
+`run_main_v7.cmd` checks the machine fingerprint (`experiments/check_machine.py`), CPU capacity
+(`cpu_capacity_check.py`) and a short sanity run against the sweep (`sanity_resume.py`) before every start, and
+resumes from the rows already written. The analysis scripts refuse to overwrite existing outputs.
 
-- The historical report recorded descriptive online-bandit mean differences of
-  -7.8% vs `rl_once` in `spike` and -7.0% in `relief`. Its significance labels
-  were not Holm-adjusted and have not been recomputed.
-- It corrected a stale offline model. The v3 data said balanced (3+3 threads)
-  wins under load. On the machine at evaluation time, the 6-thread
-  `latency_optimized` strategy won everywhere; the DQN kept choosing balanced,
-  while the bandit moved to it. Its regret against the best fixed strategy in
-  hindsight is 0.3-1.2 s per request, against 0.9-2.1 s for the DQN, and fell
-  from 0.94 s to 0.66 s between the first and second half of the run.
-- Limitation: because one fixed strategy happened to be near-optimal in every
-  scenario, the bandit only ties it in `spike` and `steady_idle` and is 4-6%
-  slower in `relief` and `steady_heavy`, the cost of its exploration
-  (about 3 switches per request). The bandit's value here is not knowing in
-  advance which fixed strategy is best, which changed between v3 and v4.
-- Decision overhead fell from 0.21 s (v3) to 0.002 s per request.
+Earlier versions (v3-v6) are reproduced with `evaluate_fixed_strategies.py`, `pilot_load_sweep.py`,
+`evaluate_adaptive.py`, `reanalyze_adaptive_v5r.py` and `run_load_sweep_v6.py`; commands are in section 19.2 of the
+report.
 
-Re-analyse saved results with `python evaluate_adaptive.py --tag v4 --report-only`.
+## Data index
 
-### Load sweep and v5 protocol
+| Path | Contents |
+|---|---|
+| `data/processed/load_sweep_v7.csv` | v7 load sweep: decode s/token per arm at 0-14 busy workers |
+| `data/processed/v7runs_v7.csv` | main run, one row per run (latency, switches, paging, RAM, commit) |
+| `data/processed/v7timelines_v7.csv`, `v7segments_v7.csv`, `v7decisions_v7.csv` | per token, per 10-token segment, per policy decision |
+| `data/processed/skipped_runs_v7.csv` | runs skipped by the RAM guard (all re-run later) |
+| `data/processed/v7*_pilot_v7.csv`, `v7*_smoke_v7.csv` | stage 5 pilot and stage 2 smoke test |
+| `data/processed/dqn_model_v7.pth` | DQN loaded by `rl_adaptive` (sha256 in [experiments/MODELS.md](experiments/MODELS.md)) |
+| `experiments/e*_plan.yaml`, `e2_frozen.yaml`, `e3_rule.yaml`, `e4_bandit_prior.yaml` | plans and frozen policy files |
+| `experiments/e4_*.csv`, `e4_summary.txt`, `e4_supplement.txt` | main-run analysis |
+| `experiments/check_main_final.txt` | final data integrity checks |
+| `experiments/reference_check.md` | how each reference in the report was checked |
+| `experiments/agent_progress.md` | dated log of every stage, including problems and deviations |
+| `experiments/untracked_files.md` | files on disk that are not in git |
+| `logs/` | main-run logs (gates, run output, retry loop) |
+| `data/processed/*_v2..v6*` | earlier versions; see section 19.3 of the report |
 
-`pilot_load_sweep.py` measures decode seconds per token for every strategy at
-0-14 busy workers (`data/processed/load_sweep_v4.csv`). On this machine there
-are three regimes:
+## Layout
 
-| Busy workers | External CPU reading | Best strategy |
-|---|---|---|
-| 0-6 | 7-49% | `static` (10 threads) |
-| 8 | 54-60% | `latency_optimized` (6 threads) |
-| 10-14 | 66-89% | `balanced` (3+3 threads); at 12 workers `static` oversubscribes the CPU and slows down about 20x |
-
-The v5 run adds a `ramp` scenario (idle, then 8 workers from token 60, then 12
-from token 140), in which no single fixed strategy is best for the whole
-response. It uses 10 workers for the other heavy phases, puts the bandit's
-bin edges at 51% and 63%, and sets the rule threshold at 60%:
-
-```bash
-python evaluate_adaptive.py --tag v5 --num-prompts 8 --heavy 10 --switch-token 60 \
-    --ramp "60:8,140:12" --threshold 60 --bandit-edges "51,63" --bin-margin 4
 ```
-
-The v4 diagnostics also changed the bandit:
-
-- Latency outliers had been assumed to be paging stalls, but no independent
-  page-fault or swap telemetry is in the saved dataset. The bandit retains a
-  latency-based outlier rule; that rule does not identify paging events.
-- Readings near a bin edge had caused bin flapping, which accounted for 53 of
-  114 switches. Bin hysteresis (`bin_margin`) now prevents it.
-- Slower forgetting (`discount=0.98`) and a smaller exploration bonus
-  (`bonus=0.08`) mean confident arms are re-checked less often.
-- The stall exclusion compares each run with the same condition in the same
-  scenario, so a policy that is slow every time (oversubscription) is kept.
-
-### v5r reanalysis (all 40 contexts)
-
-The original v5 report and CSV files are preserved. Their four “paging stall”
-exclusions used only a latency-outlier heuristic; the run file has no page-fault,
-swap, or paging telemetry to substantiate that label. The reproducible v5r
-analysis retains all 40 contexts as primary and treats contexts 14, 19, 36, and
-39 only as flagged candidates in a separately labeled sensitivity analysis.
-All seven conditions are paired in every context, and token IDs match across
-conditions in all 40 contexts. See
-[`data/processed/adaptive_report_v5r.txt`](data/processed/adaptive_report_v5r.txt)
-and rerun with `python reanalyze_adaptive_v5r.py`.
-
-For the DQN `rl_adaptive` method, all-context mean latency was slower than the
-descriptively best fixed strategy in `ramp`, `spike`, and `steady_heavy`; it
-was similar in `steady_idle` and slightly faster in `relief`. No comparison to
-the best fixed strategy or `rule_adaptive` was significant after the declared
-Holm-adjusted paired-t family. The reanalysis does not support a claim that the
-DQN is superior. Raw and adjusted paired-t and Wilcoxon p-values are retained
-in `adaptive_paired_diffs_v5r.csv`; the exact baseline, confidence interval,
-and small-sample limitations are discussed in the report.
-
-Older v3/v4/v5 prose and significance labels are historical analyses, not
-re-verified by the v5r statistical procedure. In particular, a latency outlier
-alone is not evidence of paging.
-
-### v6 policy framework, load sweep, and DQN retraining
-
-The framework implements all P0 and P1 algorithmic and baseline requirements:
-- **Baseline policies**: `cores_heuristic` (`threads = clamp(round(16 - external_cpu% * 16 / 100), 1, 10)`),
-  `rule_noh` (threshold policy with patience 0), and `segment_oracle` (hindsight upper-bound utility in `src/benchmark/oracles.py`).
-- **Emergency switch**: Bypasses decision interval on token latency spikes (>3.0x recent 10-token median)
-  to switch immediately to conservative execution (`configs/config.yaml`).
-- **Online bandit fixes**: Drops the first 2 switch tokens from cost attribution, prunes exploration for arms
-  estimated >2x the current best, disables static exploration in the top load bin, caps DQN warm-start Q-values to <=75% CPU,
-  and resets bins upon detecting persistent stalls (5 consecutive slow segments).
-- **Expanded action space**: Supports single-stage thread budgets `{2, 4, 6, 8, 10, 12}` alongside named backward aliases.
-- **Load sweep v6 complete**: Evaluated 8 worker contention levels (0-14 workers) x 3 repeats x 6 thread budgets = 144 runs
-  at 50 tokens each using Prompt 1 (`data/processed/load_sweep_v6.csv`). Confirmed optimal thread budget scales monotonically down
-  from 10 threads at load 0 to 2 threads at load 14.
-- **DQN v6 retraining complete**: Merged into `data/processed/training_data_v6.csv` (144 rows across 24 paired load contexts;
-  Prompts 21-40 strictly held out). Contextual-bandit DQN trained for 100 episodes (`data/processed/dqn_model_v6.pth`),
-  with loss converging from 0.734 to 0.056. Offline evaluation on 8 held-out load contexts (repeat 2, `data/processed/rl_offline_evaluation_v6.csv`)
-  achieved mean latency of 13.91s versus oracle 13.63s (mean regret 0.0112).
-- **Scope note**: Generalization across unseen prompts is not claimed; the v6 sweep and retraining use Prompt 1 evaluated under
-  different background-load conditions.
-- **Deferred experiments**: The P1.2 pilot ablation (`run_pilot_ablation.py`, ~55 min) and full v6 live evaluation benchmark
-  (`evaluate_adaptive.py --tag v6`, 675 runs, ~14 hours) are gated awaiting explicit approval.
-
-Results from the earlier v3 adaptive run (60-token requests, time-triggered
-load, blocking telemetry) are kept as `adaptive_*_v3.*`.
-
-## Methodology notes
-
-- **Paired, randomized measurements.** Strategies are compared within the same
-  context, in shuffled order, after warm-up. This avoids the run-order and
-  system-drift confound of v1/v2, where all runs of one strategy were done
-  before the next.
-- **Pre-decision state.** `[prompt_length, input_tokens, cpu%, ram%]` is measured
-  *before* the request runs, identically in training and serving
-  (`src/rl/features.py`).
-- **Contextual bandit.** Requests are independent, so the DQN is trained with
-  `gamma=0`. The logged data contains every action's outcome, so all three
-  rewards are learned from per context (`--chosen-action-only` disables this).
-- **Reward.** Negative seconds per generated token. CPU/RAM penalties are
-  available in `src/rl/reward.py` but disabled by default (post-run snapshots
-  are noisy).
-- **Statistics.** The v5r reanalysis reports paired bootstrap 95% CIs, paired
-  t-tests, Wilcoxon signed-rank tests, and Holm-adjusted p-values over the
-  declared comparison families. Its `significant` field means Holm-adjusted
-  paired-t $p < 0.05$; the separate CI-exclusion flag is descriptive. Older
-  version reports used a different, unadjusted criterion.
-- **Handoff metric.** Activation handoffs are in-process `clone()` timings,
-  a lower bound on a real inter-device transfer.
-
-## Data versions
-
-- v1/v2 (`*_v2.csv`): earlier runs in which the strategies were computationally
-  equivalent and measured sequentially; differences there are noise. Kept for
-  reference.
-- v3: the current engine and protocol.
-
-## Notes
-
-- RAM: the fp32 model needs about 4.4 GB. Close other applications, or set
-  `model.dtype: bfloat16` in `configs/config.yaml` to halve memory (outputs then
-  differ slightly from fp32).
-- `torch` in `.venv` is a CPU build; the strategies are designed for CPU-only execution.
+configs/config.yaml   model and strategy definitions
+src/llm/              model loading, arms, layer-sliced inference
+src/scheduler/        fixed, rule, lookup, cores-heuristic, DQN and bandit policies
+src/telemetry/        external-CPU sampler, load generators, paging counter, RAM guard
+src/rl/               features, reward, DQN agent and training
+src/benchmark/        statistics, plots, oracles
+run_v7.py             v7 runner for a plan file (smoke, pilot, main run)
+run_load_sweep_v7.py  v7 load sweep
+experiments/          plans, analysis scripts, checks, summaries
+tests/                unit tests and the real-model equivalence test
+docs/report/          final_report.html (current), project_report.html (superseded)
+```
