@@ -1,14 +1,23 @@
 # Dynamic RL-Based LLM Execution Graph Partitioning
 
+**Load-adaptive thread scheduling for LLM inference on a CPU**
+
+- Final report (PDF): [docs/report/Final_Report.pdf](docs/report/Final_Report.pdf) (HTML: [docs/report/final_report.html](docs/report/final_report.html))
+- Dashboard / presentation: [docs/dashboard/index.html](docs/dashboard/index.html)
+- Result tables: [experiments/RESULTS.md](experiments/RESULTS.md)
+- How to reproduce: [Setup](#setup) and [Reproducing the v7 stages](#reproducing-the-v7-stages)
+- Hardware the results came from: Intel Core i5-13450HX laptop (10 cores / 16 threads), 16 GB RAM, Windows 11, CPU only
+
+Scope: "partitioning" here means splitting the model's layers into stages that each get their own thread budget, run
+one after another on one CPU. Splitting the model across CPU and GPU is future work.
+
 Runs TinyLlama-1.1B (fp32) on one CPU and decides, during generation, how many threads it should use.
 The model runs layer by layer through a hand-written decode loop with one shared KV cache, so the thread budget can change between tokens without changing the output.
 Every 10 tokens a policy reads the CPU load from other processes and picks an arm: 2, 3, 4, 6 or 10 threads, or `balanced` (two sequential 3-thread stages).
 Policies compared: a lookup table measured on this machine (`rule_lookup`), a spare-cores heuristic, an offline DQN, an online bandit, and fixed arms.
 Everything is measured on one laptop (10 cores / 16 threads, 16 GB) under synthetic background load, with paired, randomized runs.
 
-**Final report: [docs/report/final_report.html](docs/report/final_report.html)** (PDF: `docs/report/Final_Report.pdf`).
-
-**Dashboard / presentation: [docs/dashboard/index.html](docs/dashboard/index.html)**: one offline HTML file; press P to present (arrows, number keys, N for speaker notes, F for fullscreen). Rebuild with `python experiments/build_dashboard.py`; `python experiments/check_dashboard_numbers.py --selftest` checks every number on it against the CSVs.
+The dashboard is one offline HTML file; press P to present (arrows, number keys, N for speaker notes, F for fullscreen). Rebuild with `python experiments/build_dashboard.py`; `python experiments/check_dashboard_numbers.py --selftest` checks every number on it against the CSVs.
 
 ## Main result (v7, pre-registered, 450 runs of 200 tokens)
 
@@ -31,8 +40,19 @@ python -m src.data.download_dataset        # Alpaca prompts
 python -m src.data.preprocess_dataset      # -> data/processed/prompts.csv
 ```
 
+Every `python` command in this README means the `.venv` interpreter: activate `.venv` first, or call
+`.venv\Scripts\python.exe` directly (another Python on PATH, such as an msys one, will not have numpy, torch or
+pytest). For example, the checks used for the final submission:
+
+```bat
+set HF_HUB_OFFLINE=1
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe experiments\check_report_numbers.py
+.venv\Scripts\python.exe experiments\check_dashboard_numbers.py --selftest
+```
+
 The first model load downloads TinyLlama/TinyLlama-1.1B-Chat-v1.0 (about 2.2 GB). After that, run with
-`HF_HUB_OFFLINE=1`. The fp32 model needs about 4.4 GB of RAM; the v7 runs skip a run when RAM is above 85%, so close
+`HF_HUB_OFFLINE=1` (tests included). The fp32 model needs about 4.4 GB of RAM; the v7 runs skip a run when RAM is above 85%, so close
 other applications (including the Claude desktop app and browsers) before long runs.
 
 ## Reproducing the v7 stages
